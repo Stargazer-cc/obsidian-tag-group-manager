@@ -1,6 +1,6 @@
 # Tag Group Manager
 
-![English](https://github.com/Stargazer-cc/addtags/blob/main/README-EN.md)
+[English](https://github.com/Stargazer-cc/addtags/blob/main/README-EN.md)
 
 ## 简介
 
