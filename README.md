@@ -1,5 +1,7 @@
 # Tag Group Manager
 
+![English](https://github.com/Stargazer-cc/addtags/blob/main/README-EN.md)
+
 ## 简介
 
 Tag Group Manager 是一个为 Obsidian 设计的插件，用于管理和快速插入标签。它允许用户创建自定义标签组，并通过浮动窗口快速将标签插入到笔记中，提高笔记整理和分类的效率。
