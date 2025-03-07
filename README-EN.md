@@ -46,6 +46,8 @@ Tag Group Manager is a plugin designed for Obsidian that helps manage and quickl
 - **Pin**: Click the 📌 button to pin the selector and prevent accidental closure
 - **Close**: Click the ✕ button or automatically close after selecting all tags
 
+![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/2.gif)
+
 ## Configuration
 
 In the plugin settings page, you can:
@@ -55,12 +57,12 @@ In the plugin settings page, you can:
 - Add or remove tags within tag groups
 - Delete tag groups that are no longer needed
 
+![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/1.png)
+
 ## Use Cases
 
-- **Project Management**: Create groups with project-related tags such as #in-progress, #completed, #pending-review, etc.
-- **Study Notes**: Create subject tag groups like #mathematics, #physics, #chemistry, etc.
-- **Daily Records**: Create commonly used tag groups for emotions, weather, etc.
-- **Content Creation**: Create tag groups for different types of content such as #tutorial, #sharing, #review, etc.
+- Applicable to frequent insertion of infrequently changing tags in notes, but the tag library is huge and you don't want to use ugly multi-level tags.
+- It is suitable for people who often use Tag to manage the film library, book library and other archive library type of personal collection library, with Quickadd and Buttons, archive note entry will be very elegant and smooth.
 
 ## FAQ
 
