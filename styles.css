@@ -1,0 +1,133 @@
+/* 标签选择器模态框样式 */
+.tag-group-selector-modal {
+  background-color: var(--background-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 0;
+  max-width: 300px;
+  width: auto;
+  z-index: 100;
+  position: absolute;
+  /* 移除了固定位置，让它可以自由定位 */
+}
+
+/* 顶部栏样式 */
+.tag-selector-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+  border-radius: 8px 8px 0 0;
+}
+
+/* 拖动句柄样式 */
+.tag-selector-drag-handle {
+  cursor: move;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-grow: 1;
+}
+
+/* 固定按钮样式 */
+.tag-selector-pin-button {
+  cursor: pointer;
+  margin-right: 8px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.tag-selector-pin-button:hover {
+  opacity: 1;
+}
+
+.tag-selector-pin-button.active {
+  color: var(--text-accent);
+  opacity: 1;
+}
+
+/* 关闭按钮样式 */
+.tag-selector-close-button {
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.tag-selector-close-button:hover {
+  opacity: 1;
+  color: var(--text-error);
+}
+
+/* 标签容器样式 */
+.tag-selector-container {
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* 标签项样式 */
+.tag-item {
+  display: inline-block;
+  margin: 4px;
+  padding: 4px 8px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.1s ease, background-color 0.2s ease;
+}
+
+.tag-item:hover {
+  transform: scale(1.05);
+  background-color: var(--interactive-accent-hover);
+}
+
+/* 设置页面标签组样式 */
+.tags-container {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+}
+
+.tags-header {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.tags-list .tag-item {
+  display: flex;
+  align-items: center;
+}
+
+.tag-text {
+  margin-right: 4px;
+}
+
+.tag-delete-btn {
+  cursor: pointer;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.tag-delete-btn:hover {
+  opacity: 1;
+  color: var(--text-error);
+}
+
+.add-tag-container {
+  display: flex;
+  gap: 8px;
+}
+
+.add-tag-container input {
+  flex-grow: 1;
+}

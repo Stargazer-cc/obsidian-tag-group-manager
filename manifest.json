@@ -1,0 +1,10 @@
+{
+  "id": "tag-group-manager",
+  "name": "Tag Group Manager",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "管理标签组并快速插入标签",
+  "author": "Obsidian User",
+  "authorUrl": "https://github.com/obsidian-user",
+  "isDesktopOnly": false
+}
