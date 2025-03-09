@@ -24,6 +24,10 @@ Tag Group Manager 是一个为 Obsidian 设计的插件，用于管理和快速�
 4. 重启 Obsidian
 5. 在设置中启用插件
 
+### BRAT安装
+
+你也可以用BRAT输入https://github.com/Stargazer-cc/obsidian-tag-group-manager 直接添加，以便获取更新。
+
 ## 使用方法
 
 ### 创建标签组
