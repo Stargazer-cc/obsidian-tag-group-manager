@@ -12,7 +12,7 @@ Tag Group Manager 是一个为 Obsidian 设计的插件，用于管理和快速�
 - **快速插入标签**：通过命令面板快速调用标签选择器
 - **浮动标签选择器**：可拖动、可固定的标签选择界面
 - **一键插入**：点击即可在光标位置插入所选标签
-- **使用后自动移除**：已使用的标签会从选择器中移除，避免重复添加
+- **使用后自动变暗**：已使用的标签会切换成另一个状态，避免重复添加
 
 ## 安装方法
 
@@ -49,10 +49,10 @@ Tag Group Manager 是一个为 Obsidian 设计的插件，用于管理和快速�
 ### 标签选择器功能
 
 - **拖动**：点击顶部「拖动」区域可以移动选择器位置
-- **固定**：点击 📌 按钮可以固定选择器，防止误关闭
 - **关闭**：点击 ✕ 按钮或选择完所有标签后自动关闭
+- **循环**：可多次重复利用插入框，点击后恢复所有标签。
 
-![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/2.gif)
+![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/3.gif)
 
 ## 配置说明
 
@@ -62,8 +62,9 @@ Tag Group Manager 是一个为 Obsidian 设计的插件，用于管理和快速�
 - 编辑标签组名称
 - 添加或删除标签组中的标签
 - 删除不再需要的标签组
+- 从标签库中添加标签。
 
-![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/1.png)
+![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/4.png)
 
 ## 使用场景
 
