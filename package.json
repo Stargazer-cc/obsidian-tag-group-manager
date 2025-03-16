@@ -1,6 +1,6 @@
 {
-  "name": "addtags",
-  "version": "1.0.0",
+  "name": "Tag Group Manager",
+  "version": "1.3.0",
   "description": "",
   "main": "main.js",
   "type": "module",
