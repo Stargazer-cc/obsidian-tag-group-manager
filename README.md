@@ -1,6 +1,7 @@
 # Tag Group Manager
 
 [English](https://github.com/Stargazer-cc/addtags/blob/main/README-EN.md)
+更详细的介绍 [前往Obsidian中文论坛](https://forum-zh.obsidian.md/t/topic/47614)
 
 ## 简介
 
