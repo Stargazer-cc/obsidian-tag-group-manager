@@ -1,16 +1,31 @@
 # Tag Group Manager
 
+![GitHub all releases](https://img.shields.io/github/downloads/stargazer-cc/obsidian-tag-group-manager/total?color=success)
+
+- [中文](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/README.md)
+
+- For more detailed introduction, [visit Obsidian Forum](https://forum.obsidian.md)
+
 ## Introduction
 
 Tag Group Manager is a plugin designed for Obsidian that helps manage and quickly insert tags. It allows users to create custom tag groups and quickly insert tags into notes through a floating window, improving the efficiency of note organization and classification.
 
+![image](https://github.com/user-attachments/assets/0e1ab649-68c0-443e-b7a5-6f0ee23aa258)
+
 ## Features
 
 - **Tag Group Management**: Create, edit, and delete custom tag groups
-- **Quick Tag Insertion**: Quickly access the tag selector through the command palette
+  - Support manual tag addition, meaning the same tag can be added to different groups
+  - Support adding from existing tags in your vault with filtering functionality, avoiding duplicates
 - **Floating Tag Selector**: Draggable and pinnable tag selection interface
-- **One-Click Insertion**: Click to insert selected tags at cursor position
-- **Auto-Remove After Use**: Used tags are automatically removed from the selector to avoid duplication
+  - **One-to-one correspondence between tag groups and floating selectors**: Each new tag group registers a floating selector generation command
+  - **Quick Tag Insertion**: Quickly call the tag selector through the command palette for insertion, supports YAML area insertion
+  - **Auto-dimming After Use**: Used tags switch to a different state to avoid duplicate additions
+- **Tag Overview View**: Tag overview page with sorting mode and tag insertion mode
+  - In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting
+  - In tag insertion mode, click to directly insert tags, supports YAML area insertion
+- **Quick Clear All Tags**
+  - Available in the right-click menu when a note is selected
 
 ## Installation
 
@@ -18,9 +33,13 @@ Tag Group Manager is a plugin designed for Obsidian that helps manage and quickl
 
 1. Download the latest release package
 2. Extract the downloaded file
-3. Copy the extracted folder to the Obsidian plugins directory: `{your-vault}/.obsidian/plugins/`
-4. Restart Obsidian
+3. Copy the extracted folder to your Obsidian plugins directory: `{your-vault}/.obsidian/plugins/`
+4. Restart Obsidian or refresh third-party plugins
 5. Enable the plugin in settings
+
+### BRAT Installation
+
+You can also use BRAT by entering https://github.com/Stargazer-cc/obsidian-tag-group-manager and selecting the latest version to get updates.
 
 ## Usage
 
@@ -29,24 +48,34 @@ Tag Group Manager is a plugin designed for Obsidian that helps manage and quickl
 1. Open Obsidian settings
 2. Go to the "Tag Group Manager" settings tab
 3. Click the "Add Tag Group" button
-4. Enter a name for the tag group
-5. Add desired tags under the tag group (no need to enter the # symbol)
+4. Enter the tag group name
+5. Add desired tags under the group (no need to enter the # symbol)
+
+![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/4.gif)
 
 ### Using Tag Groups
 
 1. While editing a note, open the command palette (Ctrl/Cmd + P)
-2. Search for "Insert here", which will display all created tag groups
-3. Select the tag group you want to use
-4. In the tag selector that appears, click on the tags you want to insert
+2. Search for "Insert Here", all created tag groups will be displayed
+3. Select the desired tag group
+4. Click the tags you want to insert in the popup tag selector
 5. Tags will be automatically inserted at the cursor position
 
 ### Tag Selector Features
 
-- **Drag**: Click on the "Drag" area at the top to move the selector
-- **Pin**: Click the 📌 button to pin the selector and prevent accidental closure
-- **Close**: Click the ✕ button or automatically close after selecting all tags
+- **Drag**: Click the "Drag" area at the top to move the selector position
+- **Close**: Click the ✕ button
+- **Cycle**: Can reuse the insertion box multiple times, clicking restores all tags
 
-![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/2.gif)
+![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/3.gif)
+
+### Tag Overview View
+- Click the star icon in the function area to activate this view
+- Switch between sorting mode and tag insertion mode
+- In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting
+- In tag insertion mode, click to directly insert tags, supports YAML area insertion
+
+![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/6.gif)
 
 ## Configuration
 
@@ -54,44 +83,37 @@ In the plugin settings page, you can:
 
 - Create multiple tag groups, each containing different types of tags
 - Edit tag group names
-- Add or remove tags within tag groups
-- Delete tag groups that are no longer needed
+- Add or remove tags from groups
+- Delete unnecessary tag groups
+- Add tags from your tag library
 
-![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/1.png)
+![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/4.png)
 
 ## Use Cases
-
-- Applicable to frequent insertion of infrequently changing tags in notes, but the tag library is huge and you don't want to use ugly multi-level tags.
-- It is suitable for people who often use Tag to manage the film library, book library and other archive library type of personal collection library, with Quickadd and Buttons, archive note entry will be very elegant and smooth.
+- Daily tag usage, wanting quick tag insertion
+- Large tag libraries where multi-level tags are undesirable
+- Managing movie libraries, book libraries, and other personal archive collections with tags, working elegantly with Quickadd and Buttons for archive note entry
 
 ## FAQ
 
-**Q: Why isn't my tag group showing in the command palette?**
+**Q: Why aren't my tag groups showing in the command palette?**
 
-A: Make sure you've added at least one tag to the group. Empty tag groups won't appear in the command palette.
+A: You must be in an editable view to call these commands.
 
-**Q: How do I modify tags that have already been added?**
+**Q: How do I make real-time added tags appear in already open tag selectors and overview pages?**
 
-A: In the plugin settings page, find the corresponding tag group and tag, delete it, and then add the modified tag.
+A: In existing tag selectors: Shift+click the cycle icon to refresh the current selector; In tag overview page: Click any group name in sorting mode to refresh.
 
-**Q: Can multiple tag selectors be displayed simultaneously?**
+**Q: How can I change the color of tag units?**
 
-A: Currently, only one tag selector can be displayed at a time. You can open a new selector after completing or closing the current one.
+A: To better adapt to different themes, it uses Obsidian's theme color. The example uses the Primary theme with RGB: 255,213,98
 
 ## Feedback and Support
 
-If you have any questions, suggestions, or feedback, please contact us through:
-- Email: ecpink@163.com
+If you have any questions, suggestions, or feedback, please contact through:
+
 - Submit an Issue on GitHub
-
-## Changelog
-
-### 1.0.0
-
-- Initial version release
-- Support for creating and managing tag groups
-- Implementation of floating tag selector
-- Support for dragging and pinning the selector
+- Send a message through the Obsidian forum
 
 ## License
 
