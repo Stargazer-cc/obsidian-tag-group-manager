@@ -590,8 +590,6 @@ class TagSelectorModal {
 				// 在非循环模式下，将标签添加已插入样式
 				if (!this.isInfiniteMode) {
 					tagEl.addClass('inserted-tag');
-					// 从标签列表中移除该标签
-					this.tags = this.tags.filter(t => t !== tag);
 				}
 				
 				// 立即更新计数显示
@@ -814,6 +812,7 @@ class TagGroupView extends ItemView {
     plugin: TagGroupManagerPlugin;
     private groupSortable: any;
     private tagSortables: any[] = [];
+    private isInsertMode: boolean = false;
 
     constructor(leaf: WorkspaceLeaf, plugin: TagGroupManagerPlugin) {
         super(leaf);
@@ -834,9 +833,23 @@ class TagGroupView extends ItemView {
         await this.renderTagGroups();
     }
 
+
+
     async renderTagGroups() {
         const container = this.containerEl.children[1];
         container.empty();
+
+        // 创建状态切换按钮容器
+        const stateControlContainer = container.createDiv('state-control-container');
+        const stateToggleBtn = stateControlContainer.createEl('button', {
+            text: this.isInsertMode ? '切换到排序模式' : '切换到插入模式',
+            cls: 'state-toggle-button'
+        });
+
+        stateToggleBtn.addEventListener('click', () => {
+            this.isInsertMode = !this.isInsertMode;
+            this.renderTagGroups();
+        });
 
         // 创建标签组容器
         const groupContainer = container.createDiv('tag-group-container');
@@ -844,88 +857,142 @@ class TagGroupView extends ItemView {
         // 渲染标签组
         this.plugin.settings.tagGroups.forEach((group, groupIndex) => {
             const groupEl = groupContainer.createDiv('tag-group-item');
+            groupEl.setAttribute('data-group-index', groupIndex.toString());
 
-            // 添加拖拽手柄
-            const handle = groupEl.createDiv('tag-group-handle');
-            handle.setText('☰');
+            // 在非插入模式下添加拖拽手柄
+            if (!this.isInsertMode) {
+                const handle = groupEl.createDiv('tag-group-handle');
+                handle.setText('☰');
+            }
 
-            // 添加组名
+            // 添加组名，在插入模式下移动到右边
             const nameEl = groupEl.createDiv('tag-group-name');
             nameEl.setText(group.name);
+            if (this.isInsertMode) {
+                nameEl.addClass('insert-mode');
+            }
             
             // 添加点击事件处理
-            nameEl.addEventListener('click', () => {
-                // 重新渲染标签组
-                this.renderTagGroups();
-                new Notice(`已刷新「${group.name}」标签组`);
-            });
+            if (!this.isInsertMode) {
+                // 在排序模式下，点击标签组名称刷新标签组
+                nameEl.addEventListener('click', () => {
+                    this.renderTagGroups();
+                    new Notice(`已刷新「${group.name}」标签组`);
+                });
+            } else {
+                // 在插入模式下，点击标签组名称显示提示
+                nameEl.addEventListener('click', () => {
+                    new Notice('请点击标签进行插入');
+                });
+            }
 
             // 创建标签容器
-            const tagsContainer = groupEl.createDiv('tags-container');
+            const tagsContainer = groupEl.createDiv('tags-view-container');
             
             // 渲染标签
             group.tags.forEach(tag => {
+				
                 const tagEl = tagsContainer.createDiv('tag-item');
                 tagEl.setText(tag);
                 tagEl.setAttribute('data-tag', tag);
+                
+                // 在插入模式下为标签添加点击事件
+                if (this.isInsertMode) {
+                    tagEl.addClass('clickable');
+                    tagEl.addEventListener('click', () => {
+						console.log("标签点击");
+                        // 先让编辑器重新获得焦点
+						const mostRecentLeaf = this.app.workspace.getMostRecentLeaf();
+
+                        if (!mostRecentLeaf) {
+							new Notice("未找到可用编辑器，请先打开一个文档");
+							return;
+						}
+                        
+                        mostRecentLeaf.setViewState({ type: "markdown", active: true });
+                        // 等待一个短暂的时间让焦点生效
+                        setTimeout(() => {
+							const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+							const editor = view?.editor;
+					
+							if (!editor) {
+								new Notice("请先打开一个 Markdown 文档并将光标放置在插入位置");
+								console.log("⚠️ 当前 view:", view);
+								return;
+							}
+                        
+								// 让编辑器重新获得焦点
+				            editor.focus();
+				
+                            const cursor = editor.getCursor();
+                            const line = editor.getLine(cursor.line);
+                            const charBefore = cursor.ch > 0 ? line[cursor.ch - 1] : '\n';
+                            
+                            // 如果光标前的字符不是空格或换行符，则先添加一个空格
+                            const prefix = (charBefore !== ' ' && charBefore !== '\n') ? ' ' : '';
+                            const tagText = `${prefix}#${tag} `;
+                            console.log('将插入标签:', tagText);
+                            editor.replaceRange(tagText, cursor);
+                            
+                            // 将光标移动到插入的标签末尾
+                            const newCursor = {
+                                line: cursor.line,
+                                ch: cursor.ch + tagText.length
+                            };
+                            editor.setCursor(newCursor);
+                        }, 50);
+                    });
+                }
             });
 
-            // 为每个标签组创建Sortable实例
-            this.tagSortables.push(
-                Sortable.create(tagsContainer, {
-                    group: 'tags',
-                    animation: 150,
-                    onEnd: async (evt: Sortable.SortableEvent) => {
-                        const tag = evt.item.getAttribute('data-tag');
-                        const groupItem = evt.from.closest('.tag-group-item');
-                        const groupIndexAttr = groupItem?.getAttribute('data-group-index');
-                        const fromGroupIndex = groupIndexAttr ? parseInt(groupIndexAttr) : -1;
-                        const toGroupItem = evt.to.closest('.tag-group-item');
-                        const toGroupIndexAttr = toGroupItem?.getAttribute('data-group-index');
-                        const toGroupIndex = toGroupIndexAttr ? parseInt(toGroupIndexAttr) : -1;
+            // 在非插入模式下创建Sortable实例
+            if (!this.isInsertMode) {
+                this.tagSortables.push(
+                    Sortable.create(tagsContainer, {
+                        group: 'tags',
+                        animation: 150,
+                        onEnd: async (evt: Sortable.SortableEvent) => {
+                            const tag = evt.item.getAttribute('data-tag');
+                            const fromGroupItem = evt.from.closest('.tag-group-item');
+                            const toGroupItem = evt.to.closest('.tag-group-item');
+                            const fromGroupIndex = parseInt(fromGroupItem?.getAttribute('data-group-index') || '0');
+                            const toGroupIndex = parseInt(toGroupItem?.getAttribute('data-group-index') || '0');
 
-                        // 更新数据
-                        if (fromGroupIndex !== -1 && toGroupIndex !== -1) {
-                            // 从源组移除标签
-                            this.plugin.settings.tagGroups[fromGroupIndex].tags = 
-                                this.plugin.settings.tagGroups[fromGroupIndex].tags.filter(t => t !== tag);
+                            if (fromGroupIndex !== toGroupIndex) {
+                                // 从源组中移除标签
+                                this.plugin.settings.tagGroups[fromGroupIndex].tags = 
+                                    this.plugin.settings.tagGroups[fromGroupIndex].tags.filter(t => t !== tag);
 
-                            // 添加到目标组
-                            if (tag && this.plugin.settings.tagGroups[toGroupIndex] && 
-                                !this.plugin.settings.tagGroups[toGroupIndex].tags.includes(tag)) {
-                                this.plugin.settings.tagGroups[toGroupIndex].tags.splice(
-                                    evt.newIndex || 0,
-                                    0,
-                                    tag
-                                );
+                                // 添加到目标组
+                                if (tag && !this.plugin.settings.tagGroups[toGroupIndex].tags.includes(tag)) {
+                                    this.plugin.settings.tagGroups[toGroupIndex].tags.push(tag);
+                                }
+
+                                await this.plugin.saveSettings();
                             }
-
-                            await this.plugin.saveSettings();
                         }
-                    }
-                })
-            );
-
-            // 添加组索引属性
-            groupEl.setAttribute('data-group-index', groupIndex.toString());
-        });
-
-        // 创建标签组Sortable实例
-        this.groupSortable = Sortable.create(groupContainer, {
-            animation: 150,
-            handle: '.tag-group-handle',
-            onEnd: async (evt: Sortable.SortableEvent) => {
-                const fromIndex = evt.oldIndex;
-                const toIndex = evt.newIndex;
-
-                // 更新标签组顺序
-                if (typeof fromIndex === 'number' && typeof toIndex === 'number') {
-                    const movedGroup = this.plugin.settings.tagGroups.splice(fromIndex, 1)[0];
-                    this.plugin.settings.tagGroups.splice(toIndex, 0, movedGroup);
-                    await this.plugin.saveSettings();
-                }
+                    })
+                );
             }
         });
+
+        // 在非插入模式下创建组排序实例
+        if (!this.isInsertMode) {
+            this.groupSortable = Sortable.create(groupContainer, {
+                animation: 150,
+                handle: '.tag-group-handle',
+                onEnd: async () => {
+                    // 更新组的顺序
+                    const newGroups: TagGroup[] = [];
+                    groupContainer.querySelectorAll('.tag-group-item').forEach((el) => {
+                        const index = parseInt(el.getAttribute('data-group-index') || '0');
+                        newGroups.push(this.plugin.settings.tagGroups[index]);
+                    });
+                    this.plugin.settings.tagGroups = newGroups;
+                    await this.plugin.saveSettings();
+                }
+            });
+        }
     }
 
     async onClose() {
