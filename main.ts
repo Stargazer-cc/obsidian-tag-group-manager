@@ -573,18 +573,77 @@ class TagSelectorModal {
 				// 在编辑器中插入标签
 				const cursor = this.editor.getCursor();
 				const line = this.editor.getLine(cursor.line);
-				const charBefore = cursor.ch > 0 ? line[cursor.ch - 1] : '\n';
 				
-				// 如果光标前的字符不是空格或换行符，则先添加一个空格
-				const prefix = (charBefore !== ' ' && charBefore !== '\n') ? ' ' : '';
-				const tagText = `${prefix}#${tag} `;
-				this.editor.replaceRange(tagText, cursor);
+				// 检查是否在YAML区域内
+				let isInYaml = false;
+				let yamlTagLine = -1;
+				const content = this.editor.getValue();
+				const lines = content.split('\n');
+				let yamlStart = false;
+				let yamlEnd = false;
+			
+				// 检查YAML前置元数据区域
+				for (let i = 0; i < lines.length; i++) {
+				    console.log(`检查第 ${i} 行: ${lines[i]}`);
+				    if (i === 0 && lines[i] === '---') {
+				        yamlStart = true;
+				        continue;
+				    }
+				    if (yamlStart && lines[i] === '---') {
+				        yamlEnd = true;
+				        break;
+				    }
+				    if (yamlStart && !yamlEnd) {
+				        // 检查是否在YAML区域内且光标在当前行
+				        if (cursor.line === i) {
+				            isInYaml = true;
+				        }
+				        // 查找tags标签所在行
+				        if (lines[i].trim().startsWith('tags:')) {
+				            yamlTagLine = i;
+				        }
+				    }
+				}
+				
+				console.log(`YAML区域状态: 开始=${yamlStart}, 结束=${yamlEnd}, 在区域内=${isInYaml}, tags行=${yamlTagLine}`);
+				let newCursor;
+				let tagText = '';
+				if (isInYaml) {
+					// 在YAML区域内使用YAML格式
+					if (yamlTagLine === -1) {
+						// 如果没有tags标签，创建一个
+						this.editor.replaceRange('tags:\n  - ' + tag + '\n', cursor);
+						newCursor = { line: cursor.line + 2, ch: 0 };
+					} else {
+						// 在已有的tags下添加新标签
+						// 找到最后一个标签的位置
+						let lastTagLine = yamlTagLine;
+						for (let i = yamlTagLine + 1; i < lines.length; i++) {
+							const line = lines[i].trim();
+							if (line.startsWith('- ')) {
+								lastTagLine = i;
+							} else if (!line.startsWith('  ') || line === '---') {
+								break;
+							}
+						}
+						// 在最后一个标签后面添加新标签
+						const pos = { line: lastTagLine + 1, ch: 0 };
+						this.editor.replaceRange('  - ' + tag + '\n', pos);
+						newCursor = { line: lastTagLine + 2, ch: 0 };
+					}
+				} else {
+					// 在正文中使用普通格式
+					const charBefore = cursor.ch > 0 ? line[cursor.ch - 1] : '\n';
+					const prefix = (charBefore !== ' ' && charBefore !== '\n') ? ' ' : '';
+					tagText = `${prefix}#${tag} `;
+					this.editor.replaceRange(tagText, cursor);
+					newCursor = {
+						line: cursor.line,
+						ch: cursor.ch + tagText.length
+					};
+				}
 				
 				// 将光标移动到插入的标签末尾
-				const newCursor = {
-					line: cursor.line,
-					ch: cursor.ch + tagText.length
-				};
 				this.editor.setCursor(newCursor);
 				
 				// 在非循环模式下，将标签添加已插入样式
@@ -926,19 +985,73 @@ class TagGroupView extends ItemView {
 				
                             const cursor = editor.getCursor();
                             const line = editor.getLine(cursor.line);
-                            const charBefore = cursor.ch > 0 ? line[cursor.ch - 1] : '\n';
-                            
-                            // 如果光标前的字符不是空格或换行符，则先添加一个空格
-                            const prefix = (charBefore !== ' ' && charBefore !== '\n') ? ' ' : '';
-                            const tagText = `${prefix}#${tag} `;
-                            console.log('将插入标签:', tagText);
-                            editor.replaceRange(tagText, cursor);
+                            const content = editor.getValue();
+                            const lines = content.split('\n');
+                            let yamlStart = false;
+                            let yamlEnd = false;
+                            let isInYaml = false;
+                            let yamlTagLine = -1;
+
+                            // 检查YAML前置元数据区域
+                            for (let i = 0; i < lines.length; i++) {
+                                if (i === 0 && lines[i] === '---') {
+                                    yamlStart = true;
+                                    continue;
+                                }
+                                if (yamlStart && lines[i] === '---') {
+                                    yamlEnd = true;
+                                    break;
+                                }
+                                if (yamlStart && !yamlEnd) {
+                                    // 检查是否在YAML区域内且光标在当前行
+                                    if (cursor.line === i) {
+                                        isInYaml = true;
+                                    }
+                                    // 查找tags标签所在行
+                                    if (lines[i].trim().startsWith('tags:')) {
+                                        yamlTagLine = i;
+                                    }
+                                }
+                            }
+							console.log(`YAML区域状态: 开始=${yamlStart}, 结束=${yamlEnd}, 在区域内=${isInYaml}, tags行=${yamlTagLine}`);
+                            let newCursor;
+                            let tagText = '';
+                            if (isInYaml) {
+                                // 在YAML区域内使用YAML格式
+                                if (yamlTagLine === -1) {
+                                    // 如果没有tags标签，创建一个
+                                    editor.replaceRange('tags:\n  - ' + tag + '\n', cursor);
+                                    newCursor = { line: cursor.line + 2, ch: 0 };
+                                } else {
+                                    // 在已有的tags下添加新标签
+                                    // 找到最后一个标签的位置
+                                    let lastTagLine = yamlTagLine;
+                                    for (let i = yamlTagLine + 1; i < lines.length; i++) {
+                                        const line = lines[i].trim();
+                                        if (line.startsWith('- ')) {
+                                            lastTagLine = i;
+                                        } else if (!line.startsWith('  ') || line === '---') {
+                                            break;
+                                        }
+                                    }
+                                    // 在最后一个标签后面添加新标签
+                                    const pos = { line: lastTagLine + 1, ch: 0 };
+                                    editor.replaceRange('  - ' + tag + '\n', pos);
+                                    newCursor = { line: lastTagLine + 2, ch: 0 };
+                                }
+                            } else {
+                                // 在正文中使用普通格式
+                                const charBefore = cursor.ch > 0 ? line[cursor.ch - 1] : '\n';
+                                const prefix = (charBefore !== ' ' && charBefore !== '\n') ? ' ' : '';
+                                tagText = `${prefix}#${tag} `;
+                                editor.replaceRange(tagText, cursor);
+                                newCursor = {
+                                    line: cursor.line,
+                                    ch: cursor.ch + tagText.length
+                                };
+                            }
                             
                             // 将光标移动到插入的标签末尾
-                            const newCursor = {
-                                line: cursor.line,
-                                ch: cursor.ch + tagText.length
-                            };
                             editor.setCursor(newCursor);
                         }, 50);
                     });
