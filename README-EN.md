@@ -21,7 +21,7 @@ Tag Group Manager is a plugin designed for Obsidian that helps manage and quickl
   - **One-to-one correspondence between tag groups and floating selectors**: Each new tag group registers a floating selector generation command
   - **Quick Tag Insertion**: Quickly call the tag selector through the command palette for insertion, supports YAML area insertion
   - **Auto-dimming After Use**: Used tags switch to a different state to avoid duplicate additions
-- **Tag Overview View**: Tag overview page with sorting mode and tag insertion mode
+- **Tag Overview Page**: Tag overview page with sorting mode and tag insertion mode
   - In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting
   - In tag insertion mode, click to directly insert tags, supports YAML area insertion
 - **Quick Clear All Tags**
@@ -69,7 +69,7 @@ You can also use BRAT by entering https://github.com/Stargazer-cc/obsidian-tag-g
 
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/3.gif)
 
-### Tag Overview page
+### Tag Overview  Page
 - Click the star icon in Ribbon to activate this view
 - Switch between sorting mode and tag insertion mode
 - In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting
