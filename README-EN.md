@@ -4,7 +4,7 @@
 
 - [中文](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/README.md)
 
-- For more detailed introduction, [visit Obsidian Chinese Forum](https://forum-zh.obsidian.md/t/topic/47614/4)
+- For more detailed introduction, [visit Obsidian Chinese Forum](https://forum-zh.obsidian.md/t/topic/47614)
 
 ## Introduction
 
