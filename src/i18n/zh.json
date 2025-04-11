@@ -1,0 +1,54 @@
+{
+  "settings": {
+    "title": "标签组管理器设置",
+    "addGroup": "添加标签组",
+    "groupName": "组名",
+    "addTag": "添加标签",
+    "addFromLibrary": "从标签库添加",
+    "deleteGroup": "删除组",
+    "deleteGroupConfirm": "确定要删除这个组吗？",
+    "enterTagName": "输入标签名",
+    "enterGroupName": "输入组名",
+    "filterTags": "筛选标签",
+    "noTagsFound": "未找到标签"
+  },
+  "selector": {
+    "drag": "拖动",
+    "close": "关闭",
+    "cycle": "循环",
+    "pin": "固定",
+    "unpin": "取消固定"
+  },
+  "overview": {
+    "title": "标签概览",
+    "sortMode": "排序模式",
+    "insertMode": "插入模式",
+    "refresh": "刷新"
+  },
+  "commands": {
+    "insertHere": "请点击标签插入",
+    "clearTags": "清除所有标签",
+    "insertFrom": "在此处插入「{groupName}」里的标签"
+  },
+  "messages": {
+    "groupCreated": "标签组已创建",
+    "groupDeleted": "标签组已删除",
+    "tagAdded": "标签已添加",
+    "tagRemoved": "标签已移除",
+    "tagsCleared": "所有标签已清除",
+    "invalidTagName": "无效的标签名",
+    "duplicateTag": "该组中已存在此标签",
+    "noEditorFound": "未找到可用编辑器，请先打开一个文档",
+    "openMarkdownFirst": "请先打开一个 Markdown 文档并将光标放置在插入位置",
+    "supportsUndo": "支持撤销",
+    "tagsClearFailed": "清除标签失败",
+    "noTagsInGroup": "该标签组没有标签",
+    "tagGroupUpdated": "已更新标签组，添加了{count}个新标签",
+    "tagGroupUpToDate": "标签组已是最新状态",
+    "noMatchingTagGroup": "无法找到匹配的标签组",
+    "cycleButtonTooltip": "循环模式：已关闭 - 点击开启循环模式，可恢复所有标签并保持数量不变。Shift+点击可从标签组更新标签列表。",
+    "cycleButtonTooltip1": "循环模式：已开启 - 点击关闭循环模式。",
+    "cycleButtonTooltip2": "循环模式：已关闭 - 点击开启循环模式，可恢复所有标签。Shift+点击可从标签组更新标签列表。",
+    "tagcounttip": "在库中使用了 {count} 次"
+  }
+}

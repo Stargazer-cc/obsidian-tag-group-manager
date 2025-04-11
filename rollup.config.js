@@ -1,6 +1,7 @@
-import typescript from 'rollup-plugin-typescript2';
-import {nodeResolve} from '@rollup/plugin-node-resolve';
-import commonjs from '@rollup/plugin-commonjs';
+const typescript = require('rollup-plugin-typescript2');
+const {nodeResolve} = require('@rollup/plugin-node-resolve');
+const commonjs = require('@rollup/plugin-commonjs');
+const json = require('@rollup/plugin-json');
 
 const isProd = (process.env.BUILD === 'production');
 
@@ -11,7 +12,7 @@ if you want to view the source visit the plugins github repository
 */
 `;
 
-export default {
+module.exports = {
   input: 'main.ts',
   output: {
     dir: '.',
@@ -26,5 +27,6 @@ export default {
     typescript(),
     nodeResolve({browser: true}),
     commonjs(),
+    json(),
   ]
 };

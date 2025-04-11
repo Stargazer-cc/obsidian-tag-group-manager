@@ -1,0 +1,54 @@
+{
+  "settings": {
+    "title": "Tag Group Manager Settings",
+    "addGroup": "Add Tag Group",
+    "groupName": "Group Name",
+    "addTag": "Add Tag",
+    "addFromLibrary": "Add from Library",
+    "deleteGroup": "Delete Group",
+    "deleteGroupConfirm": "Are you sure you want to delete this group?",
+    "enterTagName": "Enter tag name",
+    "enterGroupName": "Enter group name",
+    "filterTags": "Filter tags",
+    "noTagsFound": "No tags found"
+  },
+  "selector": {
+    "drag": "Drag",
+    "close": "Close",
+    "cycle": "Cycle",
+    "pin": "Pin",
+    "unpin": "Unpin"
+  },
+  "overview": {
+    "title": "Tag Overview",
+    "sortMode": "Sort Mode",
+    "insertMode": "Insert Mode",
+    "refresh": "Refresh"
+  },
+  "commands": {
+    "insertHere": "Please click on the tag to insert",
+    "clearTags": "Clear All Tags",
+    "insertFrom": "Insert tags from '{groupName}'"
+  },
+  "messages": {
+    "groupCreated": "Tag group created",
+    "groupDeleted": "Tag group deleted",
+    "tagAdded": "Tag added",
+    "tagRemoved": "Tag removed",
+    "tagsCleared": "All tags cleared",
+    "invalidTagName": "Invalid tag name",
+    "duplicateTag": "Tag already exists in this group",
+    "noEditorFound": "No editor found, please open a document first",
+    "openMarkdownFirst": "Please open a Markdown document and place the cursor at the insertion point",
+    "supportsUndo": "supports undo",
+    "tagsClearFailed": "Failed to clear tags",
+    "noTagsInGroup": "No tags in this group",
+    "tagGroupUpdated": "Tag group updated, added {count} new tags",
+    "tagGroupUpToDate": "Tag group is up to date",
+    "noMatchingTagGroup": "No matching tag group found",
+    "cycleButtonTooltip": "Cyclic Mode: off - click to turn on cyclic mode to restore all tags and keep the number the same. shift+click to update the tag list from the tag group.",
+    "cycleButtonTooltip1":"Cyclic Mode: enabled - click to turn off cyclic mode.Shift+click to update the tag list from the tag group.",
+    "cycleButtonTooltip2":"Cyclic Mode: turned off - click to turn on Cyclic Mode to restore all tags.Shift+click to update the tag list from the tag group.",
+    "tagcounttip":"Used {count} times in vault"
+  }
+}

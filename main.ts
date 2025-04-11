@@ -1,5 +1,6 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView } from 'obsidian';
 import Sortable from 'sortablejs';
+import { i18n } from './src/i18n';
 
 const TAG_GROUP_VIEW = 'tag-group-view';
 
@@ -135,7 +136,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 		);
 
 		// 添加星星按钮到右侧边栏
-		const starButton = this.addRibbonIcon('star', '标签组管理器', async () => {
+		const starButton = this.addRibbonIcon('star', i18n.t('overview.title'), async () => {
 			// 激活标签组管理器视图
 			await this.activateView();
 			// 关闭所有已打开的标签选择器
@@ -159,7 +160,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 				if (file) {
 					menu.addItem((item) => {
 						item
-							.setTitle('清除所有标签')
+							.setTitle(i18n.t('commands.clearTags'))
 							.setIcon('tag')
 							.onClick(async () => {
 								await this.clearAllTags(file);
@@ -199,7 +200,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 				editor.setValue(newContent);
 				
 				// 显示成功通知
-				new Notice('已清除所有标签（支持撤销）');
+				new Notice(i18n.t('messages.tagsCleared') + ' (' + i18n.t('messages.supportsUndo') + ')');
 			} else {
 				// 如果无法打开文件到编辑器，则使用原来的方法
 				// 读取文件内容
@@ -215,11 +216,11 @@ export default class TagGroupManagerPlugin extends Plugin {
 				await this.app.vault.modify(file, newContent);
 				
 				// 显示成功通知
-				new Notice('已清除所有标签');
+				new Notice(i18n.t('messages.tagsCleared'));
 			}
 		} catch (error) {
 			console.error('清除标签时出错:', error);
-			new Notice('清除标签失败: ' + error);
+			new Notice(i18n.t('messages.tagsClearFailed') + ': ' + error);
 		}
 	}
 
@@ -243,12 +244,12 @@ export default class TagGroupManagerPlugin extends Plugin {
 		this.settings.tagGroups.forEach(group => {
 			this.addCommand({
 				id: `insert-tags-from-${group.name.toLowerCase().replace(/\s+/g, '-')}`,
-				name: `在此处插入「${group.name}」里的标签`,
+				name: i18n.t('commands.insertFrom').replace('{groupName}', group.name),
 				editorCallback: (editor: Editor, view: MarkdownView) => {
 					if (group.tags.length > 0) {
 						new TagSelectorModal(this.app, editor, group.tags.slice(), this).open();
 					} else {
-						new Notice('该标签组没有标签');
+						new Notice(i18n.t('messages.noTagsInGroup'));
 					}
 				}
 			});
@@ -366,7 +367,7 @@ class TagSelectorModal {
 		const infiniteButton = topBar.createDiv('tag-selector-infinite-button');
 		infiniteButton.setText('🔄');
 		// 使用aria-label属性代替title和setTooltip，并标注当前循环模式的开关状态
-		infiniteButton.setAttribute('aria-label', '循环模式：已关闭 - 点击开启循环模式，可恢复所有标签并保持数量不变。Shift+点击可从标签组更新标签列表。');
+		infiniteButton.setAttribute('aria-label', i18n.t('messages.cycleButtonTooltip'));
 		// 移除使用plugins属性的代码
 		infiniteButton.addEventListener('click', async (e: MouseEvent) => {
 			// 如果按住Shift键点击，则更新标签组
@@ -388,12 +389,12 @@ class TagSelectorModal {
 					
 					// 显示通知
 					if (newTags.length > 0) {
-						new Notice(`已更新标签组，添加了${newTags.length}个新标签`);
+						new Notice(i18n.t('messages.tagGroupUpdated').replace('{count}', newTags.length.toString()));
 					} else {
-						new Notice('标签组已是最新状态');
+						new Notice(i18n.t('messages.tagGroupUpToDate'));
 					}
 				} else {
-					new Notice('无法找到匹配的标签组');
+					new Notice(i18n.t('messages.noMatchingTagGroup'));
 				}
 			} else {
 				// 原有的循环模式逻辑
@@ -403,10 +404,10 @@ class TagSelectorModal {
 					// 启用循环模式时，恢复所有原始标签
 					this.tags = [...this.originalTags];
 					infiniteButton.addClass('active');
-					infiniteButton.setAttribute('aria-label', '循环模式：已开启 - 点击关闭循环模式。Shift+点击可从标签组更新标签列表。');
+					infiniteButton.setAttribute('aria-label', i18n.t('messages.cycleButtonTooltip1'));
 				} else {
 					infiniteButton.removeClass('active');
-					infiniteButton.setAttribute('aria-label', '循环模式：已关闭 - 点击开启循环模式，可恢复所有标签并保持数量不变。Shift+点击可从标签组更新标签列表。');
+					infiniteButton.setAttribute('aria-label', i18n.t('messages.cycleButtonTooltip2'));
 				}
 			}
 			
@@ -419,8 +420,6 @@ class TagSelectorModal {
 		// 创建关闭按钮
 		const closeButton = topBar.createDiv('tag-selector-close-button');
 		closeButton.setText('✕');
-		closeButton.setAttribute('aria-label', '关闭标签选择器窗口');
-		// 移除title属性，避免提示重复出现
 		closeButton.addEventListener('click', () => {
 			this.close();
 		});
@@ -525,7 +524,6 @@ class TagSelectorModal {
 
 	// 获取标签使用次数
 	async getTagCount(tag: string): Promise<number> {
-		// 使用resolvedLinks来获取标签引用信息
 		const files = this.app.vault.getMarkdownFiles();
 		let count = 0;
 		
@@ -561,7 +559,7 @@ class TagSelectorModal {
 			const tagCountEl = tagEl.createDiv('tag-count');
 			const count = await this.getTagCount(tag);
 			tagCountEl.setText(`${count}`);
-			tagCountEl.setAttribute('aria-label', `在库中使用了 ${count} 次`);
+			tagCountEl.setAttribute('aria-label', i18n.t('messages.tagcounttip').replace('{count}', count.toString()));
 			
 			// 添加点击事件
 			tagEl.addEventListener('click', async (e) => {
@@ -653,13 +651,11 @@ class TagSelectorModal {
 				
 				// 立即更新计数显示
 				tagCountEl.setText(`${count + 1}`);
-				tagCountEl.setAttribute('aria-label', `在库中使用了 ${count + 1} 次`);
 				
 				// 等待元数据缓存更新后再次刷新计数
 				setTimeout(async () => {
 					const newCount = await this.getTagCount(tag);
 					tagCountEl.setText(`${newCount}`);
-					tagCountEl.setAttribute('aria-label', `在库中使用了 ${newCount} 次`);
 				}, 3000); // 将延迟时间增加到3秒，给予元数据缓存更多的更新时间
 			});
 		}
@@ -687,19 +683,19 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', { text: '标签组管理器设置' });
+		containerEl.createEl('h2', { text: i18n.t('settings.title') });
 
 
 
 		// 添加新标签组的按钮
 		new Setting(containerEl)
-			.setName('添加新标签组')
-			.setDesc('创建一个新的标签组')
+			.setName(i18n.t('settings.addGroup'))
+			.setDesc(i18n.t('settings.enterGroupName'))
 			.addButton(cb => cb
-				.setButtonText('添加标签组')
+				.setButtonText(i18n.t('settings.addGroup'))
 				.onClick(async () => {
 					this.plugin.settings.tagGroups.push({
-						name: '新标签组',
+						name: i18n.t('settings.groupName'),
 						tags: []
 					});
 					await this.plugin.saveSettings();
@@ -709,17 +705,17 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		// 显示现有标签组
 		this.plugin.settings.tagGroups.forEach((group, index) => {
 			const groupSetting = new Setting(containerEl)
-				.setName('标签组')
-				.setDesc('管理标签组及其标签')
+				.setName(i18n.t('settings.groupName'))
+				.setDesc(i18n.t('settings.enterGroupName'))
 				.addText(text => text
-					.setPlaceholder('标签组名称')
+					.setPlaceholder(i18n.t('settings.groupName'))
 					.setValue(group.name)
 					.onChange(async (value) => {
 						this.plugin.settings.tagGroups[index].name = value;
 						await this.plugin.saveSettings();
 					}))
 				.addButton(cb => cb
-					.setButtonText('删除')
+					.setButtonText(i18n.t('settings.deleteGroup'))
 					.onClick(async () => {
 						this.plugin.settings.tagGroups.splice(index, 1);
 						await this.plugin.saveSettings();
@@ -755,17 +751,17 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
             const manualAddContainer = addTagContainer.createDiv('manual-add-container');
             const addTagInput = manualAddContainer.createEl('input', {
                 type: 'text',
-                placeholder: '输入标签（不含#）'
+                placeholder: i18n.t('settings.enterTagName')
             });
             
             const addTagBtn = manualAddContainer.createEl('button', {
-                text: '手动添加标签'
+                text: i18n.t('settings.addTag')
             });
 
             // 创建从标签库添加的容器
             const libraryAddContainer = addTagContainer.createDiv('library-add-container');
             const addFromLibraryBtn = libraryAddContainer.createEl('button', {
-                text: '从标签库中直接添加'
+                text: i18n.t('settings.addFromLibrary')
             });
 
             // 创建标签库浮动区域
@@ -780,13 +776,13 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
                     // 如果标签库已显示，则是确认添加操作
                     tagLibraryContainer.style.display = 'none';
                     addFromLibraryBtn.style.backgroundColor = '';
-                    addFromLibraryBtn.textContent = '从标签库中直接添加';
+                    addFromLibraryBtn.textContent = i18n.t('settings.addFromLibrary');
                     this.display(); // 刷新当前标签组
                 } else {
                     // 显示标签库
                     tagLibraryContainer.style.display = 'block';
                     addFromLibraryBtn.style.backgroundColor = '#2ecc71';
-                    addFromLibraryBtn.textContent = '点击此处确认添加';
+                    addFromLibraryBtn.textContent = i18n.t('settings.addTag');
                     
                     // 清空并重新加载标签库
                     tagLibraryContainer.empty();
@@ -839,7 +835,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				
 				// 验证标签是否符合语法规则
 				if (!isValidTag(tagValue)) {
-					new Notice('无法添加不符合语法的标签：' + tagValue);
+					new Notice(i18n.t('messages.invalidTagName') + ': ' + tagValue);
 					return;
 				}
 				
@@ -856,7 +852,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				const tagValue = addTagInput.value.trim();
 				if (!isValidTag(tagValue) && tagValue.length > 0) {
 					addTagInput.classList.add('invalid-tag-input');
-					addTagInput.setAttribute('aria-label', '此标签不符合语法规则');
+					addTagInput.setAttribute('aria-label', i18n.t('messages.invalidTagName'));
 				} else {
 					addTagInput.classList.remove('invalid-tag-input');
 					addTagInput.removeAttribute('aria-label');
@@ -883,7 +879,7 @@ class TagGroupView extends ItemView {
     }
 
     getDisplayText(): string {
-        return '标签组管理器';
+        return i18n.t('overview.title');
     }
 
     async onOpen() {
@@ -901,7 +897,7 @@ class TagGroupView extends ItemView {
         // 创建状态切换按钮容器
         const stateControlContainer = container.createDiv('state-control-container');
         const stateToggleBtn = stateControlContainer.createEl('button', {
-            text: this.isInsertMode ? '切换到排序模式' : '切换到插入模式',
+            text: this.isInsertMode ? i18n.t('overview.sortMode') : i18n.t('overview.insertMode'),
             cls: 'state-toggle-button'
         });
 
@@ -936,12 +932,12 @@ class TagGroupView extends ItemView {
                 // 在排序模式下，点击标签组名称刷新标签组
                 nameEl.addEventListener('click', () => {
                     this.renderTagGroups();
-                    new Notice(`已刷新「${group.name}」标签组`);
+                    new Notice(i18n.t('overview.refresh') + `: ${group.name}`);
                 });
             } else {
                 // 在插入模式下，点击标签组名称显示提示
                 nameEl.addEventListener('click', () => {
-                    new Notice('请点击标签进行插入');
+                    new Notice(i18n.t('commands.insertHere'));
                 });
             }
 
@@ -964,7 +960,7 @@ class TagGroupView extends ItemView {
 						const mostRecentLeaf = this.app.workspace.getMostRecentLeaf();
 
                         if (!mostRecentLeaf) {
-							new Notice("未找到可用编辑器，请先打开一个文档");
+							new Notice(i18n.t('messages.noEditorFound') || "未找到可用编辑器，请先打开一个文档");
 							return;
 						}
                         
@@ -975,7 +971,7 @@ class TagGroupView extends ItemView {
 							const editor = view?.editor;
 					
 							if (!editor) {
-								new Notice("请先打开一个 Markdown 文档并将光标放置在插入位置");
+								new Notice(i18n.t('messages.openMarkdownFirst') || "请先打开一个 Markdown 文档并将光标放置在插入位置");
 								console.log("⚠️ 当前 view:", view);
 								return;
 							}
