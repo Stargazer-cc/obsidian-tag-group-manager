@@ -10,7 +10,7 @@
 
 Tag Group Manager is a plugin designed for Obsidian that helps manage and quickly insert tags. It allows users to create custom tag groups and quickly insert tags into notes through a floating window, improving the efficiency of note organization and classification.
 
-![image](https://github.com/user-attachments/assets/0e1ab649-68c0-443e-b7a5-6f0ee23aa258)
+![image](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/7.png)
 
 ## Features
 
