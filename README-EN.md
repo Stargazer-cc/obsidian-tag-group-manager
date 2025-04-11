@@ -70,7 +70,7 @@ You can also use BRAT by entering https://github.com/Stargazer-cc/obsidian-tag-g
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/3.gif)
 
 ### Tag Overview View
-- Click the star icon in the function area to activate this view
+- Click the star icon in Ribbon to activate this view
 - Switch between sorting mode and tag insertion mode
 - In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting
 - In tag insertion mode, click to directly insert tags, supports YAML area insertion
