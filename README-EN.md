@@ -17,7 +17,7 @@ Tag Group Manager is a plugin designed for Obsidian that helps manage and quickl
 - **Tag Group Management**: Create, edit, and delete custom tag groups
   - Support manual tag addition, meaning the same tag can be added to different groups
   - Support adding from existing tags in your vault with filtering functionality, avoiding duplicates
-- **Floating Tag Selector**: Draggable and pinnable tag selection interface
+- **Floating Tag Selector**: Draggable tag selection interface
   - **One-to-one correspondence between tag groups and floating selectors**: Each new tag group registers a floating selector generation command
   - **Quick Tag Insertion**: Quickly call the tag selector through the command palette for insertion, supports YAML area insertion
   - **Auto-dimming After Use**: Used tags switch to a different state to avoid duplicate additions
