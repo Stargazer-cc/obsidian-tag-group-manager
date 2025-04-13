@@ -14,11 +14,13 @@ interface TagGroup {
 interface TagGroupManagerSettings {
 	tagGroups: TagGroup[];
 	showStarButton: boolean;
+	language: string;
 }
 
 const DEFAULT_SETTINGS: TagGroupManagerSettings = {
 	tagGroups: [],
-	showStarButton: true
+	showStarButton: true,
+	language: 'zh'
 };
 
 export default class TagGroupManagerPlugin extends Plugin {
@@ -130,6 +132,9 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+
+		// 设置保存的语言
+		i18n.setLocale(this.settings.language);
 
 		// 注册视图类型
 		this.registerView(
@@ -687,6 +692,22 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		containerEl.createEl('h2', { text: i18n.t('settings.title') });
+
+		// 添加语言选择器
+		new Setting(containerEl)
+			.setName('Language')
+			.setDesc('选择插件界面语言')
+			.addDropdown(dropdown => dropdown
+				.addOption('zh', '中文')
+				.addOption('en', 'English')
+				.setValue(this.plugin.settings.language)
+				.onChange(async (value) => {
+					this.plugin.settings.language = value;
+					i18n.setLocale(value);
+					await this.plugin.saveSettings();
+					this.display(); // 重新渲染设置页面
+				})
+			);
 
 
 
