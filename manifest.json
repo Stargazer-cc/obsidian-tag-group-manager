@@ -1,7 +1,7 @@
 {
   "id": "tag-group-manager",
   "name": "Tag Group Manager",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "minAppVersion": "0.15.0",
   "description": "Manage tag groups and quickly insert tags. | 管理标签组并快速插入标签。",
   "author": "Stargazer-cc",

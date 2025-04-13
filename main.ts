@@ -1,6 +1,8 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView } from 'obsidian';
 import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
+import { getAllTags } from "obsidian";
+
 
 const TAG_GROUP_VIEW = 'tag-group-view';
 
@@ -529,8 +531,9 @@ class TagSelectorModal {
 		
 		for (const file of files) {
 			const cache = this.app.metadataCache.getFileCache(file);
-			if (cache?.tags) {
-				count += cache.tags.filter(t => t.tag === `#${tag}`).length;
+			if (cache) {
+				const allTags = getAllTags(cache);
+				count += allTags?.filter(t => t === `#${tag}`).length || 0;
 			}
 		}
 		
@@ -789,15 +792,15 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
                     // 获取所有文件的标签
                     const allTags = new Set<string>();
-                    this.app.vault.getMarkdownFiles().forEach(file => {
-                        const cache = this.app.metadataCache.getFileCache(file);
-                        if (cache?.tags) {
-                            cache.tags.forEach(tag => {
-                                // 移除#前缀并添加到集合
-                                allTags.add(tag.tag.substring(1));
-                            });
-                        }
-                    });
+                    for (const file of this.app.vault.getMarkdownFiles()) {
+						const cache = this.app.metadataCache.getFileCache(file);
+						if (!cache) continue;
+					
+						const tags = getAllTags(cache);
+						if (tags) {
+							tags.forEach(tag => allTags.add(tag.substring(1))); // 去掉 #
+						}
+					}
 
                     // 过滤掉所有标签组中已使用的标签
                     const usedTags = new Set<string>();
