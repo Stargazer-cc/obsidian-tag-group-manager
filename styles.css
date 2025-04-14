@@ -1,3 +1,16 @@
+/* 无效标签样式 */
+.invalid-tag {
+    color: #ff5555 !important;
+    text-decoration: line-through;
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.invalid-tag-input {
+    border-color: #ff5555 !important;
+    background-color: rgba(255, 85, 85, 0.1);
+}
+
 /* 标签选择器模态框样式 */
 .tag-group-selector-modal {
   background-color: var(--background-primary);

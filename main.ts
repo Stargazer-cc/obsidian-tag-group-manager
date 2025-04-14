@@ -27,109 +27,6 @@ export default class TagGroupManagerPlugin extends Plugin {
 	settings: TagGroupManagerSettings;
 	
 	
-	// 添加自定义CSS样式
-	addStyle() {
-		const styleEl = document.createElement('style');
-		styleEl.id = 'tag-group-manager-styles';
-		styleEl.textContent = `
-			.invalid-tag {
-				color: #ff5555 !important;
-				text-decoration: line-through;
-				opacity: 0.7;
-				cursor: not-allowed;
-			}
-			
-			.invalid-tag-input {
-				border-color: #ff5555 !important;
-				background-color: rgba(255, 85, 85, 0.1);
-			}
-			
-			.tag-item {
-				display: flex;
-				align-items: center;
-				justify-content: space-between;
-				padding-right: 8px;
-			}
-			
-			.tag-count {
-				font-size: 0.8em;
-				color: var(--text-muted);
-				background-color: var(--background-secondary);
-				padding: 2px 6px;
-				border-radius: 10px;
-				margin-left: 8px;
-			}
-
-			.tag-group-container {
-				padding: 10px;
-			}
-			
-			.tag-group-item {
-				display: flex;
-				align-items: center;
-				padding: 8px;
-				margin: 5px 0;
-				background: var(--background-secondary);
-				border-radius: 5px;
-				cursor: pointer;
-				transition: background 0.2s ease;
-			}
-			
-			.tag-group-item:hover {
-				background: var(--background-modifier-hover);
-			}
-			
-			.tag-group-handle {
-				margin-right: 10px;
-				cursor: grab;
-				color: var(--text-muted);
-			}
-			
-			.tag-group-name {
-				flex-grow: 1;
-			}
-			
-			.dragging {
-				opacity: 0.5;
-			}
-
-			.add-tag-container {
-				margin-top: 10px;
-			}
-
-			.manual-add-container {
-				display: flex;
-				gap: 8px;
-				margin-bottom: 8px;
-			}
-
-			.library-add-container {
-				position: relative;
-			}
-
-			.tag-library-container {
-				/* 使用styles.css中定义的样式 */
-			}
-
-			.library-tag-item {
-				padding: 4px 8px;
-				cursor: pointer;
-				border-radius: 4px;
-				transition: background-color 0.2s ease;
-			}
-
-			.library-tag-item:hover {
-				background-color: var(--background-modifier-hover);
-			}
-
-			.library-tag-item.selected {
-				background-color: var(--interactive-accent);
-				color: var(--text-on-accent);
-			}
-		`;
-		document.head.appendChild(styleEl);
-	}
-
 	async onload() {
 		await this.loadSettings();
 
@@ -155,9 +52,6 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 		// 添加设置选项卡
 		this.addSettingTab(new TagGroupManagerSettingTab(this.app, this));
-		
-		// 添加自定义CSS样式
-		this.addStyle();
 		
 
 
