@@ -27,6 +27,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 	settings: TagGroupManagerSettings;
 	
 	
+	
 	async onload() {
 		await this.loadSettings();
 
@@ -53,7 +54,6 @@ export default class TagGroupManagerPlugin extends Plugin {
 		// 添加设置选项卡
 		this.addSettingTab(new TagGroupManagerSettingTab(this.app, this));
 		
-
 
 		// 添加右键菜单命令：清除笔记中的所有标签
 		this.registerEvent(
@@ -328,11 +328,16 @@ class TagSelectorModal {
 		// 创建标签容器
 		this.containerEl = this.rootEl.createDiv('tag-selector-container');
 		
-		// 设置初始位置（居中）
+		// 设置初始位置（右上角）
 		const windowWidth = window.innerWidth;
 		const windowHeight = window.innerHeight;
-		this.rootEl.style.left = `${windowWidth / 2 - 150}px`;
-		this.rootEl.style.top = `${windowHeight / 2 - 100}px`;
+		const modalWidth = 300; // 标签选择器的宽度
+		const modalHeight = 200; // 标签选择器的高度
+		const padding = 20; // 与窗口边缘的距离
+		
+		// 计算右上角位置，确保不会超出窗口边界
+		this.rootEl.style.left = `${windowWidth - modalWidth - padding}px`;
+		this.rootEl.style.top = `${padding}px`;
 	}
 
 	setupDrag() {
@@ -985,6 +990,13 @@ class TagGroupView extends ItemView {
                             const fromGroupIndex = parseInt(fromGroupItem?.getAttribute('data-group-index') || '0');
                             const toGroupIndex = parseInt(toGroupItem?.getAttribute('data-group-index') || '0');
 
+                            // 更新标签顺序
+                            const newTags: string[] = [];
+                            evt.to.querySelectorAll('.tag-item').forEach((el) => {
+                                const tagValue = el.getAttribute('data-tag');
+                                if (tagValue) newTags.push(tagValue);
+                            });
+
                             if (fromGroupIndex !== toGroupIndex) {
                                 // 从源组中移除标签
                                 this.plugin.settings.tagGroups[fromGroupIndex].tags = 
@@ -994,9 +1006,12 @@ class TagGroupView extends ItemView {
                                 if (tag && !this.plugin.settings.tagGroups[toGroupIndex].tags.includes(tag)) {
                                     this.plugin.settings.tagGroups[toGroupIndex].tags.push(tag);
                                 }
-
-                                await this.plugin.saveSettings();
+                            } else {
+                                // 更新同一组内的标签顺序
+                                this.plugin.settings.tagGroups[fromGroupIndex].tags = newTags;
                             }
+
+                            await this.plugin.saveSettings();
                         }
                     })
                 );
