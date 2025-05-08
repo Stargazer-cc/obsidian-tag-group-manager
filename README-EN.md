@@ -4,24 +4,24 @@
 
 - [中文](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/README.md)
 
-- For more detailed introduction, [visit Obsidian Chinese Forum](https://forum-zh.obsidian.md/t/topic/47614)
+- For more detailed introduction, [visit Obsidian Forum](https://forum.obsidian.md)
 
 ## Introduction
 
 Tag Group Manager is a plugin designed for Obsidian that helps manage and quickly insert tags. It allows users to create custom tag groups and quickly insert tags into notes through a floating window, improving the efficiency of note organization and classification.
 
-![image](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/7.png)
+![image](https://github.com/user-attachments/assets/0e1ab649-68c0-443e-b7a5-6f0ee23aa258)
 
 ## Features
 
 - **Tag Group Management**: Create, edit, and delete custom tag groups
   - Support manual tag addition, meaning the same tag can be added to different groups
   - Support adding from existing tags in your vault with filtering functionality, avoiding duplicates
-- **Floating Tag Selector**: Draggable tag selection interface
+- **Floating Tag Selector**: Draggable and pinnable tag selection interface
   - **One-to-one correspondence between tag groups and floating selectors**: Each new tag group registers a floating selector generation command
   - **Quick Tag Insertion**: Quickly call the tag selector through the command palette for insertion, supports YAML area insertion
   - **Auto-dimming After Use**: Used tags switch to a different state to avoid duplicate additions
-- **Tag Overview Page**: Tag overview page with sorting mode and tag insertion mode
+- **Tag Overview View**: Tag overview page with sorting mode and tag insertion mode
   - In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting
   - In tag insertion mode, click to directly insert tags, supports YAML area insertion
 - **Quick Clear All Tags**
@@ -69,8 +69,8 @@ You can also use BRAT by entering https://github.com/Stargazer-cc/obsidian-tag-g
 
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/3.gif)
 
-### Tag Overview  Page
-- Click the star icon in Ribbon to activate this view
+### Tag Overview View
+- Click the star icon in the function area to activate this view
 - Switch between sorting mode and tag insertion mode
 - In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting
 - In tag insertion mode, click to directly insert tags, supports YAML area insertion

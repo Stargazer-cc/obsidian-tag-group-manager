@@ -211,6 +211,7 @@ class TagSelectorModal {
 	private plugin: TagGroupManagerPlugin | null = null;
 	private pinButton: HTMLElement;
 	private groupName: string = '';
+	private isSearchBoxFocused: boolean = false; // 搜索框是否处于焦点状态
 
 	constructor(app: App, editor: Editor, tags: string[], plugin?: TagGroupManagerPlugin) {
 		this.app = app;
@@ -229,6 +230,8 @@ class TagSelectorModal {
 		// 设置拖拽
 		this.setupDrag();
 		
+		// 监听搜索框的焦点变化
+		this.setupSearchBoxListener();
 	}
 
 	open() {
@@ -360,6 +363,22 @@ class TagSelectorModal {
 		});
 	}
 
+	// 监听搜索框的焦点变化
+	setupSearchBoxListener() {
+		// 监听搜索框的焦点变化
+		const searchInput = document.querySelector('.search-input-container input');
+		if (searchInput) {
+			searchInput.addEventListener('focus', () => {
+				this.isSearchBoxFocused = true;
+				
+			});
+			searchInput.addEventListener('blur', () => {
+				this.isSearchBoxFocused = false;
+
+			});
+		}
+	}
+
 	handleMouseMove = (e: MouseEvent) => {
 		
 		e.preventDefault();
@@ -469,91 +488,124 @@ class TagSelectorModal {
 			tagCountEl.setAttribute('aria-label', i18n.t('messages.tagcounttip').replace('{count}', count.toString()));
 			
 			// 添加点击事件
-			tagEl.addEventListener('click', async (e) => {
+			tagEl.addEventListener('mousedown', async (e) => {
+				e.preventDefault(); 
 				// 阻止事件冒泡，避免触发关闭事件
 				e.stopPropagation();
 				
 				if (!isValid) return;
-				
-				// 在编辑器中插入标签
-				const cursor = this.editor.getCursor();
-				const line = this.editor.getLine(cursor.line);
-				
-				// 检查是否在YAML区域内
-				let isInYaml = false;
-				let yamlTagLine = -1;
-				const content = this.editor.getValue();
-				const lines = content.split('\n');
-				let yamlStart = false;
-				let yamlEnd = false;
-			
-				// 检查YAML前置元数据区域
-				for (let i = 0; i < lines.length; i++) {
-				    console.log(`检查第 ${i} 行: ${lines[i]}`);
-				    if (i === 0 && lines[i] === '---') {
-				        yamlStart = true;
-				        continue;
-				    }
-				    if (yamlStart && lines[i] === '---') {
-				        yamlEnd = true;
-				        break;
-				    }
-				    if (yamlStart && !yamlEnd) {
-				        // 检查是否在YAML区域内且光标在当前行
-				        if (cursor.line === i) {
-				            isInYaml = true;
-				        }
-				        // 查找tags标签所在行
-				        if (lines[i].trim().startsWith('tags:')) {
-				            yamlTagLine = i;
-				        }
-				    }
-				}
-				
-				console.log(`YAML区域状态: 开始=${yamlStart}, 结束=${yamlEnd}, 在区域内=${isInYaml}, tags行=${yamlTagLine}`);
-				let newCursor;
-				let tagText = '';
-				if (isInYaml) {
-					// 在YAML区域内使用YAML格式
-					if (yamlTagLine === -1) {
-						// 如果没有tags标签，创建一个
-						this.editor.replaceRange('tags:\n  - ' + tag + '\n', cursor);
-						newCursor = { line: cursor.line + 2, ch: 0 };
-					} else {
-						// 在已有的tags下添加新标签
-						// 找到最后一个标签的位置
-						let lastTagLine = yamlTagLine;
-						for (let i = yamlTagLine + 1; i < lines.length; i++) {
-							const line = lines[i].trim();
-							if (line.startsWith('- ')) {
-								lastTagLine = i;
-							} else if (!line.startsWith('  ') || line === '---') {
-								break;
-							}
+
+				// 检查是否在搜索框中
+				if (this.isSearchBoxFocused) {
+					// 获取搜索框元素
+					const searchInput = document.querySelector('.search-input-container input') as HTMLInputElement;
+					if (searchInput) {
+						// 获取当前光标位置
+						const cursorPos = searchInput.selectionStart ?? 0;
+						const currentValue = searchInput.value;
+
+						// 在光标位置插入标签（不带#前缀）
+						const prefix = (cursorPos > 0 && currentValue[cursorPos - 1] !== ' ') ? ' ' : '';
+						const suffix = (cursorPos < currentValue.length && currentValue[cursorPos] !== ' ') ? ' ' : '';
+						const insertText = `${prefix}#${tag}${suffix}`;
+
+						// 更新搜索框的值
+						const newValue = currentValue.slice(0, cursorPos) + insertText + currentValue.slice(cursorPos);
+						searchInput.value = newValue;
+
+						// 触发input事件以更新搜索结果
+						const inputEvent = new Event('input', { bubbles: true });
+						searchInput.dispatchEvent(inputEvent);
+
+						// 更新光标位置
+						const newCursorPos = cursorPos + insertText.length;
+						searchInput.setSelectionRange(newCursorPos, newCursorPos);
+						searchInput.focus();
+
+						// 在非循环模式下，将标签添加已插入样式
+						if (!this.isInfiniteMode) {
+							tagEl.addClass('inserted-tag');
 						}
-						// 在最后一个标签后面添加新标签
-						const pos = { line: lastTagLine + 1, ch: 0 };
-						this.editor.replaceRange('  - ' + tag + '\n', pos);
-						newCursor = { line: lastTagLine + 2, ch: 0 };
 					}
 				} else {
-					// 在正文中使用普通格式
-					const charBefore = cursor.ch > 0 ? line[cursor.ch - 1] : '\n';
-					const prefix = (charBefore !== ' ' && charBefore !== '\n') ? ' ' : '';
-					tagText = `${prefix}#${tag} `;
-					this.editor.replaceRange(tagText, cursor);
-					newCursor = {
-						line: cursor.line,
-						ch: cursor.ch + tagText.length
-					};
-				}
+					// 在编辑器中插入标签
+					const cursor = this.editor.getCursor();
+					const line = this.editor.getLine(cursor.line);
+					
+					// 检查是否在YAML区域内
+					let isInYaml = false;
+					let yamlTagLine = -1;
+					const content = this.editor.getValue();
+					const lines = content.split('\n');
+					let yamlStart = false;
+					let yamlEnd = false;
 				
-				// 将光标移动到插入的标签末尾
-				this.editor.setCursor(newCursor);
-				
-				// 在非循环模式下，将标签添加已插入样式
-				if (!this.isInfiniteMode) {
-					tagEl.addClass('inserted-tag');
+					// 检查YAML前置元数据区域
+					for (let i = 0; i < lines.length; i++) {
+						if (i === 0 && lines[i] === '---') {
+							yamlStart = true;
+							continue;
+						}
+						if (yamlStart && lines[i] === '---') {
+							yamlEnd = true;
+							break;
+						}
+						if (yamlStart && !yamlEnd) {
+							// 检查是否在YAML区域内且光标在当前行
+							if (cursor.line === i) {
+								isInYaml = true;
+							}
+							// 查找tags标签所在行
+							if (lines[i].trim().startsWith('tags:')) {
+								yamlTagLine = i;
+							}
+						}
+					}
+					
+					let newCursor;
+					let tagText = '';
+					if (isInYaml) {
+						// 在YAML区域内使用YAML格式
+						if (yamlTagLine === -1) {
+							// 如果没有tags标签，创建一个
+							this.editor.replaceRange('tags:\n  - ' + tag + '\n', cursor);
+							newCursor = { line: cursor.line + 2, ch: 0 };
+						} else {
+							// 在已有的tags下添加新标签
+							// 找到最后一个标签的位置
+							let lastTagLine = yamlTagLine;
+							for (let i = yamlTagLine + 1; i < lines.length; i++) {
+								const line = lines[i].trim();
+								if (line.startsWith('- ')) {
+									lastTagLine = i;
+								} else if (!line.startsWith('  ') || line === '---') {
+									break;
+								}
+							}
+							// 在最后一个标签后面添加新标签
+							const pos = { line: lastTagLine + 1, ch: 0 };
+							this.editor.replaceRange('  - ' + tag + '\n', pos);
+							newCursor = { line: lastTagLine + 2, ch: 0 };
+						}
+					} else {
+						// 在正文中使用普通格式
+						const charBefore = cursor.ch > 0 ? line[cursor.ch - 1] : '\n';
+						const prefix = (charBefore !== ' ' && charBefore !== '\n') ? ' ' : '';
+						tagText = `${prefix}#${tag} `;
+						this.editor.replaceRange(tagText, cursor);
+						newCursor = {
+							line: cursor.line,
+							ch: cursor.ch + tagText.length
+						};
+					}
+					
+					// 将光标移动到插入的标签末尾
+					this.editor.setCursor(newCursor);
+
+					// 在非循环模式下，将标签添加已插入样式
+					if (!this.isInfiniteMode) {
+						tagEl.addClass('inserted-tag');
+					}
 				}
 				
 				// 立即更新计数显示
@@ -877,10 +929,41 @@ class TagGroupView extends ItemView {
                 // 在插入模式下为标签添加点击事件
                 if (this.isInsertMode) {
                     tagEl.addClass('clickable');
-                    tagEl.addEventListener('click', () => {
-						console.log("标签点击");
-                        // 先让编辑器重新获得焦点
-						const mostRecentLeaf = this.app.workspace.getMostRecentLeaf();
+                    tagEl.addEventListener('mousedown', (e) => {
+                        e.preventDefault(); // 防止焦点丢失
+                        e.stopPropagation(); // 阻止事件冒泡
+
+                        // 检查当前焦点是否在搜索框中
+                        const searchInput = document.querySelector('.search-input-container input') as HTMLInputElement;
+                        const isSearchBoxFocused = searchInput && document.activeElement === searchInput;
+
+                        if (isSearchBoxFocused) {
+                            // 在搜索框中插入标签
+                            const cursorPos = searchInput.selectionStart ?? 0;
+                            const currentValue = searchInput.value;
+
+                            // 在光标位置插入标签（不带#前缀）
+                            const prefix = (cursorPos > 0 && currentValue[cursorPos - 1] !== ' ') ? ' ' : '';
+                            const suffix = (cursorPos < currentValue.length && currentValue[cursorPos] !== ' ') ? ' ' : '';
+                            const insertText = `${prefix}#${tag}${suffix}`;
+
+                            // 更新搜索框的值
+                            const newValue = currentValue.slice(0, cursorPos) + insertText + currentValue.slice(cursorPos);
+                            searchInput.value = newValue;
+
+                            // 触发input事件以更新搜索结果
+                            const inputEvent = new Event('input', { bubbles: true });
+                            searchInput.dispatchEvent(inputEvent);
+
+                            // 更新光标位置
+                            const newCursorPos = cursorPos + insertText.length;
+                            searchInput.setSelectionRange(newCursorPos, newCursorPos);
+                            searchInput.focus();
+                            return;
+                        }
+
+                        // 如果不在搜索框中，则插入到编辑器
+                        const mostRecentLeaf = this.app.workspace.getMostRecentLeaf();
 
                         if (!mostRecentLeaf) {
 							new Notice(i18n.t('messages.noEditorFound') || "未找到可用编辑器，请先打开一个文档");
