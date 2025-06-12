@@ -4,6 +4,33 @@ import { i18n } from './src/i18n';
 import { getAllTags } from "obsidian";
 
 
+// Helper function to insert tag into an input element
+function insertTagIntoInputElement(inputElement: HTMLInputElement, tag: string, addHashPrefix: boolean = true) {
+    const cursorPos = inputElement.selectionStart ?? 0;
+    const currentValue = inputElement.value;
+    
+    let tagToInsert = addHashPrefix ? `#${tag}` : tag;
+    
+    // Add leading space if necessary
+    const prefix = (cursorPos > 0 && currentValue[cursorPos - 1] !== ' ' && currentValue.length > 0) ? ' ' : '';
+    // Add trailing space
+    const suffix = ' ';
+
+    const textToInsert = `${prefix}${tagToInsert}${suffix}`;
+
+    const newValue = currentValue.slice(0, cursorPos) + textToInsert + currentValue.slice(cursorPos);
+    inputElement.value = newValue;
+
+    // Trigger input event to ensure the form framework (e.g., React, Svelte) picks up the change
+    const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+    inputElement.dispatchEvent(inputEvent);
+
+    // Update cursor position
+    const newCursorPos = cursorPos + textToInsert.length;
+    inputElement.setSelectionRange(newCursorPos, newCursorPos);
+    inputElement.focus();
+}
+
 const TAG_GROUP_VIEW = 'tag-group-view';
 
 interface TagGroup {
@@ -230,8 +257,8 @@ class TagSelectorModal {
 		// 设置拖拽
 		this.setupDrag();
 		
-		// 监听搜索框的焦点变化
-		this.setupSearchBoxListener();
+		// 异步设置搜索框监听器
+		this.setupSearchBoxListener().catch(console.error);
 	}
 
 	open() {
@@ -364,17 +391,27 @@ class TagSelectorModal {
 	}
 
 	// 监听搜索框的焦点变化
-	setupSearchBoxListener() {
-		// 监听搜索框的焦点变化
-		const searchInput = document.querySelector('.search-input-container input');
+	async setupSearchBoxListener() {
+		// 尝试获取搜索框元素
+		let searchInput = document.querySelector('.search-input-container input');
+		let retryCount = 0;
+		const maxRetries = 5;
+
+		// 如果没有找到搜索框，且未超过最大重试次数，则等待后重试
+		while (!searchInput && retryCount < maxRetries) {
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			searchInput = document.querySelector('.search-input-container input');
+			retryCount++;
+		}
+
 		if (searchInput) {
 			searchInput.addEventListener('focus', () => {
 				this.isSearchBoxFocused = true;
-				
+				console.log('搜索框获得焦点');
 			});
 			searchInput.addEventListener('blur', () => {
 				this.isSearchBoxFocused = false;
-
+				console.log('搜索框失去焦点');
 			});
 		}
 	}
@@ -489,6 +526,27 @@ class TagSelectorModal {
 			
 			// 添加点击事件
 			tagEl.addEventListener('mousedown', async (e) => {
+				// Check for PCards input field first
+				const pcardsTagInput = document.querySelector('form.quick-note-form input#tags') as HTMLInputElement;
+				if (pcardsTagInput) {
+					e.preventDefault();
+					e.stopPropagation();
+					if (!isValid) return;
+
+					insertTagIntoInputElement(pcardsTagInput, tag);
+
+					if (!this.isInfiniteMode) {
+						tagEl.addClass('inserted-tag');
+					}
+					// Update count display
+					tagCountEl.setText(`${count + 1}`);
+					setTimeout(async () => {
+						const newCount = await this.getTagCount(tag);
+						tagCountEl.setText(`${newCount}`);
+					}, 3000);
+					return; // Exit if PCards input is handled
+				}
+
 				e.preventDefault(); 
 				// 阻止事件冒泡，避免触发关闭事件
 				e.stopPropagation();
@@ -526,6 +584,7 @@ class TagSelectorModal {
 						if (!this.isInfiniteMode) {
 							tagEl.addClass('inserted-tag');
 						}
+						// No need to dispatch input event for Obsidian's search, it handles it.
 					}
 				} else {
 					// 在编辑器中插入标签
@@ -738,6 +797,176 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
             const addFromLibraryBtn = libraryAddContainer.createEl('button', {
                 text: i18n.t('settings.addFromLibrary')
             });
+            
+            // 创建批量筛选添加按钮
+            const batchFilterBtn = libraryAddContainer.createEl('button', {
+                text: i18n.t('settings.batchFilterAdd') || '批量筛选添加',
+                cls: 'batch-filter-btn'
+            });
+            
+            // 创建批量筛选标签的浮动区域
+            const batchFilterContainer = libraryAddContainer.createDiv('batch-filter-container');
+            batchFilterContainer.style.display = 'none';
+            
+            // 批量筛选添加按钮点击事件
+            batchFilterBtn.addEventListener('click', async () => {
+                const isVisible = batchFilterContainer.style.display !== 'none';
+                
+                if (isVisible) {
+                    // 如果筛选界面已显示，则是确认添加操作
+                    batchFilterContainer.style.display = 'none';
+                    batchFilterBtn.style.backgroundColor = '';
+                    batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd') || '批量筛选添加';
+                    this.display(); // 刷新当前标签组
+                } else {
+                    // 显示筛选界面
+                    batchFilterContainer.style.display = 'block';
+                    batchFilterBtn.style.backgroundColor = '#2ecc71';
+                     batchFilterBtn.textContent = i18n.t('settings.addSelectedTags') || '添加选中标签';
+                    
+                    // 清空并重新加载筛选界面
+                    batchFilterContainer.empty();
+                    
+                    // 创建筛选输入框
+                    const filterInputContainer = batchFilterContainer.createDiv('filter-input-container');
+                    const filterInput = filterInputContainer.createEl('input', {
+                         type: 'text',
+                         placeholder: i18n.t('settings.filterTagsPlaceholder') || '输入关键词筛选标签'
+                     });
+                    
+                    // 创建全选/取消全选按钮
+                    const selectAllBtn = filterInputContainer.createEl('button', {
+                         text: i18n.t('settings.selectAll') || '全选',
+                         cls: 'select-all-btn'
+                     });
+                    
+                    // 创建标签显示区域
+                    const filteredTagsContainer = batchFilterContainer.createDiv('filtered-tags-container');
+                    
+                    // 获取所有文件的标签
+                    const allTags = new Set<string>();
+                    for (const file of this.app.vault.getMarkdownFiles()) {
+                        const cache = this.app.metadataCache.getFileCache(file);
+                        if (!cache) continue;
+                    
+                        const tags = getAllTags(cache);
+                        if (tags) {
+                            tags.forEach(tag => allTags.add(tag.substring(1))); // 去掉 #
+                        }
+                    }
+
+                    // 过滤掉所有标签组中已使用的标签
+                    const usedTags = new Set<string>();
+                    this.plugin.settings.tagGroups.forEach(group => {
+                        group.tags.forEach(tag => usedTags.add(tag));
+                    });
+                    const availableTags = Array.from(allTags)
+                        .filter(tag => !usedTags.has(tag))
+                        .sort();
+                    
+                    // 渲染筛选后的标签
+                    const renderFilteredTags = (filterText: string) => {
+                        filteredTagsContainer.empty();
+                        
+                        const filteredTags = filterText.trim() === '' 
+                            ? availableTags 
+                            : availableTags.filter(tag => tag.toLowerCase().includes(filterText.toLowerCase()));
+                        
+                        if (filteredTags.length === 0) {
+                             filteredTagsContainer.createDiv('no-tags-message').setText(i18n.t('settings.noMatchingTags') || '没有匹配的标签');
+                             return;
+                         }
+                        
+                        // 默认全选所有筛选出的标签
+                         const isAllSelected = true;
+                         selectAllBtn.textContent = isAllSelected ? (i18n.t('settings.deselectAll') || '取消全选') : (i18n.t('settings.selectAll') || '全选');
+                        
+                        filteredTags.forEach(tag => {
+                            const tagEl = filteredTagsContainer.createDiv('library-tag-item');
+                            tagEl.setText(tag);
+                            tagEl.setAttribute('data-tag', tag);
+                            
+                            // 默认选中所有筛选出的标签
+                            if (isAllSelected) {
+                                tagEl.addClass('selected');
+                            }
+                            
+                            tagEl.addEventListener('click', () => {
+                                tagEl.toggleClass('selected', true);
+                                
+                                // 更新全选按钮状态
+                                const allTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item');
+                                const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
+                                selectAllBtn.textContent = (allTagEls.length === selectedTagEls.length) ? (i18n.t('settings.deselectAll') || '取消全选') : (i18n.t('settings.selectAll') || '全选');
+                            });
+                        });
+                    };
+                    
+                    // 初始渲染所有可用标签
+                    renderFilteredTags('');
+                    
+                    // 添加筛选输入框事件
+                    filterInput.addEventListener('input', () => {
+                        renderFilteredTags(filterInput.value);
+                    });
+                    
+                    // 添加全选/取消全选按钮事件
+                    selectAllBtn.addEventListener('click', () => {
+                        const allTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item');
+                        const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
+                        const shouldSelect = allTagEls.length !== selectedTagEls.length;
+                        
+                        allTagEls.forEach(el => {
+                            if (shouldSelect) {
+                                el.addClass('selected');
+                            } else {
+                                el.removeClass('selected');
+                            }
+                        });
+                        
+                        selectAllBtn.textContent = shouldSelect ? (i18n.t('settings.deselectAll') || '取消全选') : (i18n.t('settings.selectAll') || '全选');
+                    });
+                    
+                    // 移除之前的点击事件处理程序，避免重复添加
+                     const oldClickHandler = batchFilterBtn.onclick;
+                     batchFilterBtn.onclick = async (e) => {
+                         // 阻止事件冒泡，避免触发外层的点击事件
+                         e.stopPropagation();
+                         e.preventDefault();
+                        const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
+                        if (selectedTagEls.length === 0) {
+                             new Notice(i18n.t('settings.selectAtLeastOneTag') || '请至少选择一个标签');
+                             return;
+                         }
+                        
+                        // 添加选中的标签到当前标签组
+                        let addedCount = 0;
+                        for (const tagEl of Array.from(selectedTagEls)) {
+                            const tag = tagEl.getAttribute('data-tag');
+                            if (tag && !this.plugin.settings.tagGroups[index].tags.includes(tag)) {
+                                this.plugin.settings.tagGroups[index].tags.push(tag);
+                                addedCount++;
+                            }
+                        }
+                        
+                        if (addedCount > 0) {
+                            await this.plugin.saveSettings();
+                            const successMessage = i18n.t('settings.tagsAddedSuccess') || `成功添加 {{count}} 个标签到 {{groupName}} 组`;
+                             new Notice(successMessage
+                                 .replace('{{count}}', addedCount.toString())
+                                 .replace('{{groupName}}', this.plugin.settings.tagGroups[index].name));
+                         } else {
+                             new Notice(i18n.t('settings.noNewTagsAdded') || '没有新标签被添加');
+                        }
+                        
+                        // 隐藏筛选界面并重置按钮
+                        batchFilterContainer.style.display = 'none';
+                        batchFilterBtn.style.backgroundColor = '';
+                        batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd') || '批量筛选添加';
+                        this.display(); // 刷新当前标签组
+                    };
+                }
+            });
 
             // 创建标签库浮动区域
             const tagLibraryContainer = libraryAddContainer.createDiv('tag-library-container');
@@ -932,6 +1161,13 @@ class TagGroupView extends ItemView {
                     tagEl.addEventListener('mousedown', (e) => {
                         e.preventDefault(); // 防止焦点丢失
                         e.stopPropagation(); // 阻止事件冒泡
+
+                        // Check for PCards input field first
+                        const pcardsTagInput = document.querySelector('form.quick-note-form input#tags') as HTMLInputElement;
+                        if (pcardsTagInput) {
+                            insertTagIntoInputElement(pcardsTagInput, tag);
+                            return; // Exit if PCards input is handled
+                        }
 
                         // 检查当前焦点是否在搜索框中
                         const searchInput = document.querySelector('.search-input-container input') as HTMLInputElement;
