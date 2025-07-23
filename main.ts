@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, moment } from 'obsidian';
 import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
 import { getAllTags } from "obsidian";
@@ -38,28 +38,72 @@ interface TagGroup {
 	tags: string[];
 }
 
+interface TagColorMapping {
+	pattern: string;  // 标签名或正则表达式
+	color: string;    // 颜色值 (hex, rgb, 或 CSS 颜色名)
+	isRegex: boolean; // 是否为正则表达式
+	enabled: boolean; // 是否启用此映射
+}
+
 interface TagGroupManagerSettings {
 	tagGroups: TagGroup[];
 	showStarButton: boolean;
-	language: string;
+	tagColorMappings: TagColorMapping[]; // 新增：标签颜色映射表
+	enableCustomColors: boolean;         // 新增：是否启用自定义颜色功能
 }
 
 const DEFAULT_SETTINGS: TagGroupManagerSettings = {
 	tagGroups: [],
 	showStarButton: true,
-	language: 'zh'
+	tagColorMappings: [],
+	enableCustomColors: false
 };
+
+// 工具函数：根据标签名获取对应的颜色
+function getTagColor(tagName: string, colorMappings: TagColorMapping[]): string | null {
+	if (!colorMappings || colorMappings.length === 0) {
+		return null;
+	}
+
+	for (const mapping of colorMappings) {
+		if (!mapping.enabled) continue;
+
+		try {
+			if (mapping.isRegex) {
+				const regex = new RegExp(mapping.pattern, 'i'); // 不区分大小写
+				if (regex.test(tagName)) {
+					return mapping.color;
+				}
+			} else {
+				// 精确匹配（不区分大小写）
+				if (tagName.toLowerCase() === mapping.pattern.toLowerCase()) {
+					return mapping.color;
+				}
+			}
+		} catch (error) {
+			// 正则表达式错误时跳过此映射
+			// console.warn(`Invalid regex pattern in tag color mapping: ${mapping.pattern}`, error);
+			continue;
+		}
+	}
+
+	return null;
+}
 
 export default class TagGroupManagerPlugin extends Plugin {
 	settings: TagGroupManagerSettings;
+	private registeredCommands: string[] = []; // 跟踪已注册的命令ID
 	
 	
 	
 	async onload() {
 		await this.loadSettings();
 
-		// 设置保存的语言
-		i18n.setLocale(this.settings.language);
+		// 使用moment.js获取语言设置（这是Obsidian内部使用的方式）
+		const momentLocale = moment.locale() || 'en';
+		// 如果是中文相关的locale，使用中文，否则使用英文
+		const locale = momentLocale.startsWith('zh') ? 'zh' : 'en';
+		i18n.setLocale(locale);
 
 		// 注册视图类型
 		this.registerView(
@@ -147,31 +191,29 @@ export default class TagGroupManagerPlugin extends Plugin {
 				new Notice(i18n.t('messages.tagsCleared'));
 			}
 		} catch (error) {
-			console.error('清除标签时出错:', error);
+			// console.error('清除标签时出错:', error);
 			new Notice(i18n.t('messages.tagsClearFailed') + ': ' + error);
 		}
 	}
 
-	onunload() {
-		// 清理工作
-		
-	}
+
 
 
 
 	// 注册每个标签组的命令
 	registerTagGroupCommands() {
-		// 清除现有命令
-		// @ts-ignore
-		this.app.commands.commands = Object.fromEntries(
-			// @ts-ignore
-			Object.entries(this.app.commands.commands).filter(([id]) => !id.startsWith('tag-group-manager:insert-'))
-		);
+		// 清除现有的标签组命令
+		this.registeredCommands.forEach(commandId => {
+			// @ts-ignore - removeCommand 是私有方法，但这是清理命令的正确方式
+			this.app.commands.removeCommand(commandId);
+		});
+		this.registeredCommands = [];
 
 		// 为每个标签组注册新命令
 		this.settings.tagGroups.forEach(group => {
+			const commandId = `insert-tags-from-${group.name.toLowerCase().replace(/\s+/g, '-')}`;
 			this.addCommand({
-				id: `insert-tags-from-${group.name.toLowerCase().replace(/\s+/g, '-')}`,
+				id: commandId,
 				name: i18n.t('commands.insertFrom').replace('{groupName}', group.name),
 				editorCallback: (editor: Editor, view: MarkdownView) => {
 					if (group.tags.length > 0) {
@@ -181,7 +223,18 @@ export default class TagGroupManagerPlugin extends Plugin {
 					}
 				}
 			});
+			// 记录已注册的命令ID
+			this.registeredCommands.push(`tag-group-manager:${commandId}`);
 		});
+	}
+
+	onunload() {
+		// 清理所有注册的命令
+		this.registeredCommands.forEach(commandId => {
+			// @ts-ignore - removeCommand 是私有方法，但这是清理命令的正确方式
+			this.app.commands.removeCommand(commandId);
+		});
+		this.registeredCommands = [];
 	}
 
 	async loadSettings() {
@@ -258,7 +311,9 @@ class TagSelectorModal {
 		this.setupDrag();
 		
 		// 异步设置搜索框监听器
-		this.setupSearchBoxListener().catch(console.error);
+		this.setupSearchBoxListener().catch(() => {
+			// 静默处理错误
+		});
 	}
 
 	open() {
@@ -407,13 +462,31 @@ class TagSelectorModal {
 		if (searchInput) {
 			searchInput.addEventListener('focus', () => {
 				this.isSearchBoxFocused = true;
-				console.log('搜索框获得焦点');
+				// console.log('搜索框获得焦点');
 			});
 			searchInput.addEventListener('blur', () => {
 				this.isSearchBoxFocused = false;
-				console.log('搜索框失去焦点');
+				// console.log('搜索框失去焦点');
 			});
 		}
+		
+		// 添加全局点击事件监听器，用于检测搜索框的焦点状态
+		document.addEventListener('mousedown', (e) => {
+			const searchInput = document.querySelector('.search-input-container input');
+			if (searchInput && e.target === searchInput) {
+				this.isSearchBoxFocused = true;
+				// console.log('通过点击检测到搜索框获得焦点');
+			}
+		});
+
+		// 添加全局键盘事件监听器，用于检测搜索框的焦点状态
+		document.addEventListener('keydown', () => {
+			const searchInput = document.querySelector('.search-input-container input');
+			if (searchInput && document.activeElement === searchInput) {
+				this.isSearchBoxFocused = true;
+				// console.log('通过键盘检测到搜索框获得焦点');
+			}
+		});
 	}
 
 	handleMouseMove = (e: MouseEvent) => {
@@ -506,20 +579,37 @@ class TagSelectorModal {
 		
 		// 渲染每个标签
 		for (const tag of this.tags) {
-			const tagEl = this.containerEl.createDiv('tag-item');
-			
+			const tagEl = this.containerEl.createDiv('tgm-tag-item');
+
 			// 检查标签是否有效
 			const isValid = this.isValidTag(tag);
 			if (!isValid) {
 				tagEl.addClass('invalid-tag');
 			}
-			
+
+			// 应用自定义颜色（如果启用且有匹配的颜色映射）
+			if (this.plugin && this.plugin.settings.enableCustomColors) {
+				const customColor = getTagColor(tag, this.plugin.settings.tagColorMappings);
+				if (customColor) {
+					// 检查是否是预设的彩虹颜色
+					const isRainbowColor = customColor.startsWith('var(--color-');
+					if (isRainbowColor) {
+						tagEl.addClass('tag-group-manager-rainbow-tag');
+						tagEl.setAttribute('data-color', customColor);
+					} else {
+						// 使用传统的自定义颜色样式
+						tagEl.style.setProperty('--custom-tag-color', customColor);
+						tagEl.addClass('custom-colored-tag');
+					}
+				}
+			}
+
 			// 创建标签文本容器
-			const tagTextEl = tagEl.createDiv('tag-text');
+			const tagTextEl = tagEl.createDiv('tgm-tag-text');
 			tagTextEl.setText(tag);
 			
 			// 添加标签计数
-			const tagCountEl = tagEl.createDiv('tag-count');
+			const tagCountEl = tagEl.createDiv('tgm-tag-count');
 			const count = await this.getTagCount(tag);
 			tagCountEl.setText(`${count}`);
 			tagCountEl.setAttribute('aria-label', i18n.t('messages.tagcounttip').replace('{count}', count.toString()));
@@ -536,7 +626,7 @@ class TagSelectorModal {
 					insertTagIntoInputElement(pcardsTagInput, tag);
 
 					if (!this.isInfiniteMode) {
-						tagEl.addClass('inserted-tag');
+						tagEl.addClass('tgm-inserted-tag');
 					}
 					// Update count display
 					tagCountEl.setText(`${count + 1}`);
@@ -553,39 +643,56 @@ class TagSelectorModal {
 				
 				if (!isValid) return;
 
-				// 检查是否在搜索框中
-				if (this.isSearchBoxFocused) {
-					// 获取搜索框元素
-					const searchInput = document.querySelector('.search-input-container input') as HTMLInputElement;
-					if (searchInput) {
-						// 获取当前光标位置
-						const cursorPos = searchInput.selectionStart ?? 0;
-						const currentValue = searchInput.value;
+				// 首先检查是否有任何输入框处于焦点状态（除了Markdown编辑器）
+				const activeElement = document.activeElement as HTMLElement;
 
-						// 在光标位置插入标签（不带#前缀）
-						const prefix = (cursorPos > 0 && currentValue[cursorPos - 1] !== ' ') ? ' ' : '';
-						const suffix = (cursorPos < currentValue.length && currentValue[cursorPos] !== ' ') ? ' ' : '';
-						const insertText = `${prefix}#${tag}${suffix}`;
+				// 检查是否是输入框或文本区域（但不是Markdown编辑器）
+				const isInputElement = activeElement && (
+					activeElement.tagName === 'INPUT' ||
+					activeElement.tagName === 'TEXTAREA' ||
+					activeElement.contentEditable === 'true'
+				);
 
-						// 更新搜索框的值
-						const newValue = currentValue.slice(0, cursorPos) + insertText + currentValue.slice(cursorPos);
-						searchInput.value = newValue;
+				// 检查是否是Markdown编辑器
+				const isMarkdownEditor = activeElement && (
+					activeElement.classList.contains('cm-editor') ||
+					activeElement.closest('.cm-editor') ||
+					activeElement.classList.contains('CodeMirror') ||
+					activeElement.closest('.CodeMirror')
+				);
 
-						// 触发input事件以更新搜索结果
-						const inputEvent = new Event('input', { bubbles: true });
-						searchInput.dispatchEvent(inputEvent);
+				// 如果是输入框但不是Markdown编辑器，使用统一的插入规则
+				if (isInputElement && !isMarkdownEditor) {
+					const inputElement = activeElement as HTMLInputElement | HTMLTextAreaElement;
 
-						// 更新光标位置
-						const newCursorPos = cursorPos + insertText.length;
-						searchInput.setSelectionRange(newCursorPos, newCursorPos);
-						searchInput.focus();
+					// 统一的插入规则：带#号，连续插入时空一格
+					const cursorPos = inputElement.selectionStart ?? 0;
+					const currentValue = inputElement.value;
 
-						// 在非循环模式下，将标签添加已插入样式
-						if (!this.isInfiniteMode) {
-							tagEl.addClass('inserted-tag');
-						}
-						// No need to dispatch input event for Obsidian's search, it handles it.
+					// 检查光标前是否需要空格
+					const prefix = (cursorPos > 0 && currentValue[cursorPos - 1] !== ' ') ? ' ' : '';
+					// 检查光标后是否需要空格
+					const suffix = (cursorPos < currentValue.length && currentValue[cursorPos] !== ' ') ? ' ' : '';
+					const insertText = `${prefix}#${tag}${suffix}`;
+
+					// 更新输入框的值
+					const newValue = currentValue.slice(0, cursorPos) + insertText + currentValue.slice(cursorPos);
+					inputElement.value = newValue;
+
+					// 触发input事件以确保其他插件能检测到变化
+					const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+					inputElement.dispatchEvent(inputEvent);
+
+					// 更新光标位置
+					const newCursorPos = cursorPos + insertText.length;
+					inputElement.setSelectionRange(newCursorPos, newCursorPos);
+					inputElement.focus();
+
+					// 在非循环模式下，将标签添加已插入样式
+					if (!this.isInfiniteMode) {
+						tagEl.addClass('tgm-inserted-tag');
 					}
+					// No need to dispatch input event for Obsidian's search, it handles it.
 				} else {
 					// 在编辑器中插入标签
 					const cursor = this.editor.getCursor();
@@ -663,7 +770,7 @@ class TagSelectorModal {
 
 					// 在非循环模式下，将标签添加已插入样式
 					if (!this.isInfiniteMode) {
-						tagEl.addClass('inserted-tag');
+						tagEl.addClass('tgm-inserted-tag');
 					}
 				}
 				
@@ -677,6 +784,8 @@ class TagSelectorModal {
 				}, 3000); // 将延迟时间增加到3秒，给予元数据缓存更多的更新时间
 			});
 		}
+
+
 	}
 
 	close() {
@@ -701,28 +810,46 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', { text: i18n.t('settings.title') });
+		// ==================== 颜色设置区域 ====================
+		this.renderColorSettings(containerEl);
 
-		// 添加语言选择器
-		new Setting(containerEl)
-			.setName('Language')
-			.setDesc('选择插件界面语言')
-			.addDropdown(dropdown => dropdown
-				.addOption('zh', '中文')
-				.addOption('en', 'English')
-				.setValue(this.plugin.settings.language)
+		// ==================== 标签组管理区域 ====================
+		this.renderTagGroupSettings(containerEl);
+	}
+
+
+
+	// 渲染颜色设置区域
+	renderColorSettings(containerEl: HTMLElement): void {
+		const colorSection = containerEl.createDiv('settings-section');
+		colorSection.createEl('h3', { text: i18n.t('settings.colorSettings') || '颜色设置', cls: 'settings-section-title' });
+
+		// 添加自定义颜色功能开关
+		new Setting(colorSection)
+			.setName(i18n.t('settings.enableCustomColors'))
+			.setDesc(i18n.t('settings.enableCustomColorsDesc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableCustomColors)
 				.onChange(async (value) => {
-					this.plugin.settings.language = value;
-					i18n.setLocale(value);
+					this.plugin.settings.enableCustomColors = value;
 					await this.plugin.saveSettings();
 					this.display(); // 重新渲染设置页面
 				})
 			);
 
+		// 如果启用了自定义颜色，显示颜色配置界面
+		if (this.plugin.settings.enableCustomColors) {
+			this.renderColorMappingSettings(colorSection);
+		}
+	}
 
+	// 渲染标签组设置区域
+	renderTagGroupSettings(containerEl: HTMLElement): void {
+		const tagGroupSection = containerEl.createDiv('settings-section');
+		tagGroupSection.createEl('h3', { text: i18n.t('settings.tagGroupSettings') || '标签组管理', cls: 'settings-section-title' });
 
 		// 添加新标签组的按钮
-		new Setting(containerEl)
+		new Setting(tagGroupSection)
 			.setName(i18n.t('settings.addGroup'))
 			.setDesc(i18n.t('settings.enterGroupName'))
 			.addButton(cb => cb
@@ -738,38 +865,47 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		// 显示现有标签组
 		this.plugin.settings.tagGroups.forEach((group, index) => {
-			const groupSetting = new Setting(containerEl)
-				.setName(i18n.t('settings.groupName'))
-				.setDesc(i18n.t('settings.enterGroupName'))
-				.addText(text => text
-					.setPlaceholder(i18n.t('settings.groupName'))
-					.setValue(group.name)
-					.onChange(async (value) => {
-						this.plugin.settings.tagGroups[index].name = value;
-						await this.plugin.saveSettings();
-					}))
-				.addButton(cb => cb
-					.setButtonText(i18n.t('settings.deleteGroup'))
-					.onClick(async () => {
-						this.plugin.settings.tagGroups.splice(index, 1);
-						await this.plugin.saveSettings();
-						this.display();
-					}));
+			// 创建独立的标签组容器
+			const groupContainer = tagGroupSection.createDiv('tag-group-container-settings');
 
-			// 标签管理区域
-			const tagsContainer = containerEl.createDiv('tags-container');
-			const tagsHeader = tagsContainer.createDiv('tags-header');
-			tagsHeader.setText(`${group.name}`);
+			// 标签管理区域（现在包含组名编辑）
+			const tagsContainer = groupContainer.createDiv('tgm-tags-container');
+
+			// 组名编辑区域（放在标签容器顶部）
+			const groupHeaderContainer = tagsContainer.createDiv('tgm-group-header');
+
+			const groupNameInput = groupHeaderContainer.createEl('input', {
+				type: 'text',
+				value: group.name,
+				placeholder: i18n.t('settings.groupName'),
+				cls: 'tgm-group-name-input'
+			});
+
+			groupNameInput.addEventListener('change', async () => {
+				this.plugin.settings.tagGroups[index].name = groupNameInput.value;
+				await this.plugin.saveSettings();
+			});
+
+			const deleteGroupBtn = groupHeaderContainer.createEl('button', {
+				text: i18n.t('settings.deleteGroup'),
+				cls: 'tgm-delete-group-btn'
+			});
+
+			deleteGroupBtn.onclick = async () => {
+				this.plugin.settings.tagGroups.splice(index, 1);
+				await this.plugin.saveSettings();
+				this.display();
+			};
 
 			// 显示现有标签
-			const tagsList = tagsContainer.createDiv('tags-list');
+			const tagsList = tagsContainer.createDiv('tgm-tags-list');
 			group.tags.forEach((tag, tagIndex) => {
-				const tagEl = tagsList.createDiv('tag-item');
+				const tagEl = tagsList.createDiv('tgm-tag-item');
 				
-				const tagText = tagEl.createSpan('tag-text');
+				const tagText = tagEl.createSpan('tgm-tag-text');
 				tagText.setText(`#${tag}`);
 				
-				const deleteBtn = tagEl.createSpan('tag-delete-btn');
+				const deleteBtn = tagEl.createSpan('tgm-tag-delete-btn');
 				deleteBtn.setText('✕');
 				deleteBtn.addEventListener('click', async () => {
 					this.plugin.settings.tagGroups[index].tags.splice(tagIndex, 1);
@@ -1064,6 +1200,128 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			});
 		});
 	}
+
+	// 渲染颜色映射设置界面
+	renderColorMappingSettings(containerEl: HTMLElement): void {
+		// 创建颜色映射子区域
+		const colorMappingSection = containerEl.createDiv('color-mapping-subsection');
+		colorMappingSection.createEl('h4', { text: i18n.t('settings.tagColorMappings'), cls: 'settings-subsection-title' });
+
+		// 添加说明文字
+		const descEl = colorMappingSection.createEl('p', {
+			text: i18n.t('settings.colorMappingDesc'),
+			cls: 'setting-item-description'
+		});
+
+		// 添加新颜色映射按钮
+		new Setting(colorMappingSection)
+			.setName(i18n.t('settings.addColorMapping'))
+			.setDesc(i18n.t('settings.addColorMappingDesc'))
+			.addButton(cb => cb
+				.setButtonText(i18n.t('settings.addColorMapping'))
+				.onClick(async () => {
+					this.plugin.settings.tagColorMappings.push({
+						pattern: '',
+						color: '#3b82f6',
+						isRegex: false,
+						enabled: true
+					});
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		// 显示现有颜色映射
+		this.plugin.settings.tagColorMappings.forEach((mapping, index) => {
+			const mappingContainer = colorMappingSection.createDiv('color-mapping-item-compact');
+
+			// 创建单行设置，包含所有控件
+			const setting = new Setting(mappingContainer)
+				.setName(`${i18n.t('settings.colorMapping')} ${index + 1}`)
+				.setDesc('')
+				.addToggle(toggle => toggle
+					.setValue(mapping.enabled)
+					.setTooltip(i18n.t('settings.enabled'))
+					.onChange(async (value) => {
+						this.plugin.settings.tagColorMappings[index].enabled = value;
+						await this.plugin.saveSettings();
+					}))
+				.addText(text => text
+					.setPlaceholder(i18n.t('settings.patternPlaceholder'))
+					.setValue(mapping.pattern)
+					.onChange(async (value) => {
+						this.plugin.settings.tagColorMappings[index].pattern = value;
+						await this.plugin.saveSettings();
+					}))
+				.addToggle(toggle => toggle
+					.setValue(mapping.isRegex)
+					.setTooltip(i18n.t('settings.useRegex'))
+					.onChange(async (value) => {
+						this.plugin.settings.tagColorMappings[index].isRegex = value;
+						await this.plugin.saveSettings();
+					}));
+
+			// 添加预设颜色选择器
+			this.addPresetColorPicker(setting, mapping, index);
+
+			setting.addButton(cb => cb
+				.setButtonText(i18n.t('settings.delete'))
+				.setWarning()
+				.onClick(async () => {
+					this.plugin.settings.tagColorMappings.splice(index, 1);
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+		});
+	}
+
+	// 添加预设颜色选择器
+	addPresetColorPicker(setting: Setting, mapping: TagColorMapping, index: number): void {
+		// 定义彩虹目录的七种预设颜色（基于Obsidian主题变量）
+		const presetColors = [
+			{ name: i18n.t('settings.presetRed') || '红色', value: 'var(--color-red)', rgb: '#e74c3c' },
+			{ name: i18n.t('settings.presetBlue') || '蓝色', value: 'var(--color-blue)', rgb: '#3498db' },
+			{ name: i18n.t('settings.presetGreen') || '绿色', value: 'var(--color-green)', rgb: '#2ecc71' },
+			{ name: i18n.t('settings.presetOrange') || '橙色', value: 'var(--color-orange)', rgb: '#f39c12' },
+			{ name: i18n.t('settings.presetPurple') || '紫色', value: 'var(--color-purple)', rgb: '#9b59b6' },
+			{ name: i18n.t('settings.presetCyan') || '青色', value: 'var(--color-cyan)', rgb: '#1abc9c' },
+			{ name: i18n.t('settings.presetPink') || '粉色', value: 'var(--color-pink)', rgb: '#e91e63' }
+		];
+
+		// 添加预设颜色下拉选择器
+		setting.addDropdown(dropdown => {
+			dropdown.addOption('', i18n.t('settings.customColor') || '自定义颜色');
+			presetColors.forEach((color, colorIndex) => {
+				dropdown.addOption(color.value, color.name);
+			});
+
+			// 设置当前值
+			const currentPreset = presetColors.find(color => color.value === mapping.color);
+			dropdown.setValue(currentPreset ? currentPreset.value : '');
+
+			dropdown.onChange(async (value) => {
+				if (value) {
+					// 选择了预设颜色
+					this.plugin.settings.tagColorMappings[index].color = value;
+				} else {
+					// 选择了自定义颜色，使用默认颜色
+					this.plugin.settings.tagColorMappings[index].color = '#3b82f6';
+				}
+				await this.plugin.saveSettings();
+				this.display(); // 重新渲染以更新颜色选择器
+			});
+		});
+
+		// 只有在选择自定义颜色时才显示颜色选择器
+		const isCustomColor = !presetColors.some(color => color.value === mapping.color);
+		if (isCustomColor) {
+			setting.addColorPicker(color => color
+				.setValue(mapping.color)
+				.onChange(async (value) => {
+					this.plugin.settings.tagColorMappings[index].color = value;
+					await this.plugin.saveSettings();
+				}));
+		}
+	}
 }
 
 // 标签组视图
@@ -1150,10 +1408,27 @@ class TagGroupView extends ItemView {
             
             // 渲染标签
             group.tags.forEach(tag => {
-				
-                const tagEl = tagsContainer.createDiv('tag-item');
+
+                const tagEl = tagsContainer.createDiv('tgm-tag-item');
                 tagEl.setText(tag);
                 tagEl.setAttribute('data-tag', tag);
+
+                // 应用自定义颜色（如果启用且有匹配的颜色映射）
+                if (this.plugin.settings.enableCustomColors) {
+                    const customColor = getTagColor(tag, this.plugin.settings.tagColorMappings);
+                    if (customColor) {
+                        // 检查是否是预设的彩虹颜色
+                        const isRainbowColor = customColor.startsWith('var(--color-');
+                        if (isRainbowColor) {
+                            tagEl.addClass('tag-group-manager-rainbow-tag');
+                            tagEl.setAttribute('data-color', customColor);
+                        } else {
+                            // 使用传统的自定义颜色样式
+                            tagEl.style.setProperty('--custom-tag-color', customColor);
+                            tagEl.addClass('custom-colored-tag');
+                        }
+                    }
+                }
                 
                 // 在插入模式下为标签添加点击事件
                 if (this.isInsertMode) {
@@ -1162,39 +1437,50 @@ class TagGroupView extends ItemView {
                         e.preventDefault(); // 防止焦点丢失
                         e.stopPropagation(); // 阻止事件冒泡
 
-                        // Check for PCards input field first
-                        const pcardsTagInput = document.querySelector('form.quick-note-form input#tags') as HTMLInputElement;
-                        if (pcardsTagInput) {
-                            insertTagIntoInputElement(pcardsTagInput, tag);
-                            return; // Exit if PCards input is handled
-                        }
+                        // 首先检查是否有任何输入框处于焦点状态（除了Markdown编辑器）
+                        const activeElement = document.activeElement as HTMLElement;
 
-                        // 检查当前焦点是否在搜索框中
-                        const searchInput = document.querySelector('.search-input-container input') as HTMLInputElement;
-                        const isSearchBoxFocused = searchInput && document.activeElement === searchInput;
+                        // 检查是否是输入框或文本区域（但不是Markdown编辑器）
+                        const isInputElement = activeElement && (
+                            activeElement.tagName === 'INPUT' ||
+                            activeElement.tagName === 'TEXTAREA' ||
+                            activeElement.contentEditable === 'true'
+                        );
 
-                        if (isSearchBoxFocused) {
-                            // 在搜索框中插入标签
-                            const cursorPos = searchInput.selectionStart ?? 0;
-                            const currentValue = searchInput.value;
+                        // 检查是否是Markdown编辑器
+                        const isMarkdownEditor = activeElement && (
+                            activeElement.classList.contains('cm-editor') ||
+                            activeElement.closest('.cm-editor') ||
+                            activeElement.classList.contains('CodeMirror') ||
+                            activeElement.closest('.CodeMirror')
+                        );
 
-                            // 在光标位置插入标签（不带#前缀）
+                        // 如果是输入框但不是Markdown编辑器，使用统一的插入规则
+                        if (isInputElement && !isMarkdownEditor) {
+                            const inputElement = activeElement as HTMLInputElement | HTMLTextAreaElement;
+
+                            // 统一的插入规则：带#号，连续插入时空一格
+                            const cursorPos = inputElement.selectionStart ?? 0;
+                            const currentValue = inputElement.value;
+
+                            // 检查光标前是否需要空格
                             const prefix = (cursorPos > 0 && currentValue[cursorPos - 1] !== ' ') ? ' ' : '';
+                            // 检查光标后是否需要空格
                             const suffix = (cursorPos < currentValue.length && currentValue[cursorPos] !== ' ') ? ' ' : '';
                             const insertText = `${prefix}#${tag}${suffix}`;
 
-                            // 更新搜索框的值
+                            // 更新输入框的值
                             const newValue = currentValue.slice(0, cursorPos) + insertText + currentValue.slice(cursorPos);
-                            searchInput.value = newValue;
+                            inputElement.value = newValue;
 
-                            // 触发input事件以更新搜索结果
-                            const inputEvent = new Event('input', { bubbles: true });
-                            searchInput.dispatchEvent(inputEvent);
+                            // 触发input事件以确保其他插件能检测到变化
+                            const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+                            inputElement.dispatchEvent(inputEvent);
 
                             // 更新光标位置
                             const newCursorPos = cursorPos + insertText.length;
-                            searchInput.setSelectionRange(newCursorPos, newCursorPos);
-                            searchInput.focus();
+                            inputElement.setSelectionRange(newCursorPos, newCursorPos);
+                            inputElement.focus();
                             return;
                         }
 
@@ -1214,7 +1500,7 @@ class TagGroupView extends ItemView {
 					
 							if (!editor) {
 								new Notice(i18n.t('messages.openMarkdownFirst') || "请先打开一个 Markdown 文档并将光标放置在插入位置");
-								console.log("⚠️ 当前 view:", view);
+								// console.log("⚠️ 当前 view:", view);
 								return;
 							}
                         
@@ -1251,7 +1537,7 @@ class TagGroupView extends ItemView {
                                     }
                                 }
                             }
-							console.log(`YAML区域状态: 开始=${yamlStart}, 结束=${yamlEnd}, 在区域内=${isInYaml}, tags行=${yamlTagLine}`);
+							// console.log(`YAML区域状态: 开始=${yamlStart}, 结束=${yamlEnd}, 在区域内=${isInYaml}, tags行=${yamlTagLine}`);
                             let newCursor;
                             let tagText = '';
                             if (isInYaml) {
@@ -1311,7 +1597,7 @@ class TagGroupView extends ItemView {
 
                             // 更新标签顺序
                             const newTags: string[] = [];
-                            evt.to.querySelectorAll('.tag-item').forEach((el) => {
+                            evt.to.querySelectorAll('.tgm-tag-item').forEach((el) => {
                                 const tagValue = el.getAttribute('data-tag');
                                 if (tagValue) newTags.push(tagValue);
                             });
