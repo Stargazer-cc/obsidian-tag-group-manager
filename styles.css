@@ -313,12 +313,65 @@
   justify-content: space-between;
   color: var(--text-on-accent);
   align-items: center;
-  padding: 8px;
-  margin: 5px 0;
+  padding: 6px;
+  margin: 5px -3px;
   background: var(--background-secondary);
   border-radius: 5px;
   cursor: pointer;
   transition: background 0.2s ease;
+  min-height: 140px;
+  position: relative;
+}
+
+/* 标签组之间的分隔线 - 在标签容器区域居中 */
+.tag-group-item:not(:last-child) .tags-view-container::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 2px;
+  background: linear-gradient(to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.2) 20%,
+    rgba(255, 255, 255, 0.2) 80%,
+    transparent 100%);
+  opacity: 1;
+  z-index: 1;
+}
+
+/* 浅色主题下的分隔线 */
+.theme-light .tag-group-item:not(:last-child) .tags-view-container::after {
+  background: linear-gradient(to right,
+    transparent 0%,
+    rgba(0, 0, 0, 0.15) 20%,
+    rgba(0, 0, 0, 0.15) 80%,
+    transparent 100%);
+}
+
+/* 标签组名称容器 - 包含拖拽手柄和名称 */
+.tag-group-name-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  align-self: stretch;
+  position: relative;
+}
+
+/* 插入模式下的名称容器样式 */
+.tag-group-item .tag-group-name-container:has(.tag-group-name.insert-mode) {
+  margin-left: auto;
+  min-width: 32px;
+  justify-content: center;
+}
+
+/* 标签容器样式 */
+.tags-view-container {
+  position: relative;
+  flex: 1;
 }
   
 .tag-group-item .tgm-tag-item.clickable {
@@ -347,34 +400,39 @@
   color: var(--text-on-accent);
 }
 
-.tag-group-item .tag-group-handle {
+.tag-group-name-container .tag-group-handle {
   display: flex;
-  align-items: center; 
-  height: 8vh;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  width: 100%;
   cursor: grab;
   color: var(--text-muted);
   opacity: 0.7;
   transition: opacity 0.2s ease;
+  font-size: 14px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
-.tag-group-item .tag-group-handle:hover {
+.tag-group-name-container .tag-group-handle:hover {
   opacity: 1;
 }
 
 
-.tag-group-name {
+.tag-group-name-container .tag-group-name {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 4px;
-  padding: 12px 6px;
+  margin: 0;
+  padding: 8px 6px;
   background: linear-gradient(145deg, var(--background-secondary), var(--background-primary));
   color: var(--text-normal);
   border-radius: 6px;
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  min-height: 120px;
-  width: -webkit-fill-available;
+  max-height: fit-content;
+  flex: 1;
   line-height: 1.4;
   letter-spacing: 2px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -384,7 +442,7 @@
   cursor: pointer;
   user-select: none;
   position: relative;
-  overflow: hidden;  
+  overflow: hidden;
 }
 
 .state-control-container {
@@ -416,16 +474,18 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.tag-group-name.insert-mode {
+.tag-group-name-container .tag-group-name.insert-mode {
   writing-mode: vertical-rl;
-  margin-left: auto;
-  padding: 6px 12px;
-  min-height: unset;
-  width: auto;
+  margin-right: 8px;
+  padding: 6px 8px;
+  height: 100px;
+  width: 34px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   letter-spacing: normal;
   text-orientation: mixed;
-  min-height: 120px;
-  width: 32px;
   line-height: 1.4;
   letter-spacing: 2px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -438,19 +498,19 @@
   overflow: hidden;
 }
 
-.tag-group-name:hover {
+.tag-group-name-container .tag-group-name:hover {
   color: var(--text-accent);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   transform: translateY(-1px);
 }
 
-.tag-group-name:active {
+.tag-group-name-container .tag-group-name:active {
   transform: translateY(1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.1s ease;
 }
 
-.tag-group-name::after {
+.tag-group-name-container .tag-group-name::after {
   content: '';
   position: absolute;
   top: 50%;
@@ -463,7 +523,7 @@
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
-.tag-group-name:active::after {
+.tag-group-name-container .tag-group-name:active::after {
   transform: translate(-50%, -50%) scale(2);
   opacity: 1;
   transition: transform 0.3s ease, opacity 0s;
@@ -711,26 +771,10 @@
   background-color: rgba(255, 85, 85, 0.1);
 }
 
-
-
-.tag-group-container {
-  padding: 10px;
-}
-
-
 .tag-group-item:hover {
   background: var(--background-modifier-hover);
 }
 
-.tag-group-handle {
-  margin-right: 10px;
-  cursor: grab;
-  color: var(--text-muted);
-}
-
-.tag-group-name {
-  flex-grow: 1;
-}
 
 .dragging {
   opacity: 0.5;

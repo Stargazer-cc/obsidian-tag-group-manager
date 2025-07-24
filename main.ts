@@ -1376,14 +1376,17 @@ class TagGroupView extends ItemView {
             const groupEl = groupContainer.createDiv('tag-group-item');
             groupEl.setAttribute('data-group-index', groupIndex.toString());
 
-            // 在非插入模式下添加拖拽手柄
+            // 创建标签组名称容器（包含拖拽手柄和名称）
+            const nameContainer = groupEl.createDiv('tag-group-name-container');
+
+            // 在非插入模式下添加拖拽手柄到名称容器的上方
             if (!this.isInsertMode) {
-                const handle = groupEl.createDiv('tag-group-handle');
+                const handle = nameContainer.createDiv('tag-group-handle');
                 handle.setText('☰');
             }
 
-            // 添加组名，在插入模式下移动到右边
-            const nameEl = groupEl.createDiv('tag-group-name');
+            // 添加组名到名称容器
+            const nameEl = nameContainer.createDiv('tag-group-name');
             nameEl.setText(group.name);
             if (this.isInsertMode) {
                 nameEl.addClass('insert-mode');
