@@ -638,17 +638,17 @@
 
 /* 标签库容器样式 */
 .tag-library-container {
-  margin-top: 10px;
+  position: relative;
+  width: 100%;
+  margin: 0;
   padding: 16px;
-  background: linear-gradient(145deg, var(--background-secondary), var(--background-primary));
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   max-height: 300px;
   overflow-y: auto;
-  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.15),
-              -1px -1px 3px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
-  position: relative;
   z-index: 1000;
 }
 
@@ -689,12 +689,18 @@
 
 /* 批量筛选相关样式 */
 .batch-filter-container {
-    margin-top: 8px;
-    padding: 8px;
-    background-color: var(--background-secondary);
-    border-radius: 4px;
+    position: relative;
+    width: 100%;
+    margin: 0;
+    padding: 16px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
     max-height: 300px;
     overflow-y: auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    z-index: 1000;
 }
 
 .filter-input-container {
@@ -781,28 +787,69 @@
 }
 
 .add-tag-container {
+  position: relative;
   margin-top: 10px;
   margin-bottom: 10px;
-}
-
-.manual-add-container {
+  padding: 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.manual-add-container input {
-  flex: 1;
-  min-width: 200px;
-}
-
-.library-add-container {
-  position: relative;
-  display: flex;
-  gap: 12px;
-  align-items: center;
   flex-wrap: wrap;
 }
+
+/* 输入框样式 */
+.add-tag-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 6px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+/* 按钮样式 */
+.add-tag-btn,
+.library-btn,
+.batch-filter-btn {
+  padding: 6px 12px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.add-tag-btn:hover,
+.library-btn:hover,
+.batch-filter-btn:hover {
+  background-color: var(--interactive-accent-hover);
+}
+
+/* 弹出容器样式 */
+.popup-container {
+  position: relative;
+  width: 100%;
+  margin-top: 12px;
+  clear: both;
+}
+
+/* 当有弹出内容时，按钮容器的样式调整 */
+.add-tag-container:has(.tag-library-container[style*="display: block"]),
+.add-tag-container:has(.batch-filter-container[style*="display: block"]) {
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: 0;
+}
+
+
 
 .library-tag-item {
   padding: 4px 8px;

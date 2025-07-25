@@ -914,34 +914,39 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				});
 			});
 
-			// 添加新标签
+			// 添加新标签 - 统一的按钮行布局
             const addTagContainer = tagsContainer.createDiv('add-tag-container');
-            
-            // 创建手动添加标签的容器
-            const manualAddContainer = addTagContainer.createDiv('manual-add-container');
-            const addTagInput = manualAddContainer.createEl('input', {
+
+            // 创建输入框
+            const addTagInput = addTagContainer.createEl('input', {
                 type: 'text',
-                placeholder: i18n.t('settings.enterTagName')
-            });
-            
-            const addTagBtn = manualAddContainer.createEl('button', {
-                text: i18n.t('settings.addTag')
+                placeholder: i18n.t('settings.enterTagName'),
+                cls: 'add-tag-input'
             });
 
-            // 创建从标签库添加的容器
-            const libraryAddContainer = addTagContainer.createDiv('library-add-container');
-            const addFromLibraryBtn = libraryAddContainer.createEl('button', {
-                text: i18n.t('settings.addFromLibrary')
+            // 创建添加标签按钮
+            const addTagBtn = addTagContainer.createEl('button', {
+                text: i18n.t('settings.addTag'),
+                cls: 'add-tag-btn'
             });
-            
+
+            // 创建从标签库添加按钮
+            const addFromLibraryBtn = addTagContainer.createEl('button', {
+                text: i18n.t('settings.addFromLibrary'),
+                cls: 'library-btn'
+            });
+
             // 创建批量筛选添加按钮
-            const batchFilterBtn = libraryAddContainer.createEl('button', {
+            const batchFilterBtn = addTagContainer.createEl('button', {
                 text: i18n.t('settings.batchFilterAdd') || '批量筛选添加',
                 cls: 'batch-filter-btn'
             });
-            
+
+            // 创建弹出区域容器（在按钮行下方）
+            const popupContainer = addTagContainer.createDiv('popup-container');
+
             // 创建批量筛选标签的浮动区域
-            const batchFilterContainer = libraryAddContainer.createDiv('batch-filter-container');
+            const batchFilterContainer = popupContainer.createDiv('batch-filter-container');
             batchFilterContainer.style.display = 'none';
             
             // 批量筛选添加按钮点击事件
@@ -1105,7 +1110,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
             });
 
             // 创建标签库浮动区域
-            const tagLibraryContainer = libraryAddContainer.createDiv('tag-library-container');
+            const tagLibraryContainer = popupContainer.createDiv('tag-library-container');
             tagLibraryContainer.style.display = 'none';
 
             // 从标签库添加按钮点击事件
