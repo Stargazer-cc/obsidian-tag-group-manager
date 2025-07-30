@@ -1365,6 +1365,111 @@
   box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2), -2px -2px 5px rgba(255, 255, 255, 0.15);
 }
 
+/* 动态位置样式 */
+.tgm-position-element {
+  position: absolute;
+}
+
+/* 特定位置类 */
+.tgm-position-default {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 300px;
+}
+
+.tgm-position-draggable {
+  position: absolute;
+  cursor: move;
+}
+
+/* 创建一个网格系统用于位置定位 */
+.tgm-position-grid {
+  --grid-cols: 20;
+  --grid-rows: 20;
+}
+
+/* 生成一系列位置类 */
+.tgm-pos-x-0 { left: 0; }
+.tgm-pos-x-1 { left: 5%; }
+.tgm-pos-x-2 { left: 10%; }
+.tgm-pos-x-3 { left: 15%; }
+.tgm-pos-x-4 { left: 20%; }
+.tgm-pos-x-5 { left: 25%; }
+.tgm-pos-x-6 { left: 30%; }
+.tgm-pos-x-7 { left: 35%; }
+.tgm-pos-x-8 { left: 40%; }
+.tgm-pos-x-9 { left: 45%; }
+.tgm-pos-x-10 { left: 50%; }
+.tgm-pos-x-11 { left: 55%; }
+.tgm-pos-x-12 { left: 60%; }
+.tgm-pos-x-13 { left: 65%; }
+.tgm-pos-x-14 { left: 70%; }
+.tgm-pos-x-15 { left: 75%; }
+.tgm-pos-x-16 { left: 80%; }
+.tgm-pos-x-17 { left: 85%; }
+.tgm-pos-x-18 { left: 90%; }
+.tgm-pos-x-19 { left: 95%; }
+
+.tgm-pos-y-0 { top: 0; }
+.tgm-pos-y-1 { top: 5%; }
+.tgm-pos-y-2 { top: 10%; }
+.tgm-pos-y-3 { top: 15%; }
+.tgm-pos-y-4 { top: 20%; }
+.tgm-pos-y-5 { top: 25%; }
+.tgm-pos-y-6 { top: 30%; }
+.tgm-pos-y-7 { top: 35%; }
+.tgm-pos-y-8 { top: 40%; }
+.tgm-pos-y-9 { top: 45%; }
+.tgm-pos-y-10 { top: 50%; }
+.tgm-pos-y-11 { top: 55%; }
+.tgm-pos-y-12 { top: 60%; }
+.tgm-pos-y-13 { top: 65%; }
+.tgm-pos-y-14 { top: 70%; }
+.tgm-pos-y-15 { top: 75%; }
+.tgm-pos-y-16 { top: 80%; }
+.tgm-pos-y-17 { top: 85%; }
+.tgm-pos-y-18 { top: 90%; }
+.tgm-pos-y-19 { top: 95%; }
+
+/* 动态显示/隐藏样式 */
+.tgm-display-none {
+  display: none;
+}
+
+.tgm-display-block {
+  display: block;
+}
+
+/* 按钮状态样式 */
+.tgm-btn-active {
+  background-color: #2ecc71;
+}
+
+.tgm-btn-default {
+  background-color: var(--interactive-accent);
+}
+
+/* 自定义颜色标签 */
+.tgm-custom-color-tag {
+  --custom-tag-color: inherit;
+  background-color: var(--custom-tag-color);
+}
+
+/* 自定义颜色数据属性样式 */
+[data-custom-color] {
+  --custom-tag-color: attr(data-custom-color);
+}
+
+/* 预定义颜色类 */
+.tgm-color-red { --custom-tag-color: #e74c3c; }
+.tgm-color-blue { --custom-tag-color: #3498db; }
+.tgm-color-green { --custom-tag-color: #2ecc71; }
+.tgm-color-orange { --custom-tag-color: #f39c12; }
+.tgm-color-purple { --custom-tag-color: #9b59b6; }
+.tgm-color-cyan { --custom-tag-color: #1abc9c; }
+.tgm-color-pink { --custom-tag-color: #e91e63; }
+
 /* 设置项间距优化 */
 .settings-section .setting-item {
   border-bottom: 1px solid var(--background-modifier-border-hover);

@@ -90,6 +90,21 @@ function getTagColor(tagName: string, colorMappings: TagColorMapping[]): string 
 	return null;
 }
 
+// 工具函数：根据颜色值获取对应的CSS类
+function getColorClass(colorValue: string): string | null {
+	const colorMap: {[key: string]: string} = {
+		'var(--color-red)': 'tgm-color-red',
+		'var(--color-blue)': 'tgm-color-blue',
+		'var(--color-green)': 'tgm-color-green',
+		'var(--color-orange)': 'tgm-color-orange',
+		'var(--color-purple)': 'tgm-color-purple',
+		'var(--color-cyan)': 'tgm-color-cyan',
+		'var(--color-pink)': 'tgm-color-pink',
+	};
+	
+	return colorMap[colorValue] || null;
+}
+
 export default class TagGroupManagerPlugin extends Plugin {
 	settings: TagGroupManagerSettings;
 	private registeredCommands: string[] = []; // 跟踪已注册的命令ID
@@ -211,7 +226,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 		// 为每个标签组注册新命令
 		this.settings.tagGroups.forEach(group => {
-			const commandId = `insert-tags-from-${group.name.toLowerCase().replace(/\s+/g, '-')}`;
+			const commandId = `${group.name.toLowerCase().replace(/\s+/g, '-')}`;
 			this.addCommand({
 				id: commandId,
 				name: i18n.t('commands.insertFrom').replace('{groupName}', group.name),
@@ -224,7 +239,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 				}
 			});
 			// 记录已注册的命令ID
-			this.registeredCommands.push(`tag-group-manager:${commandId}`);
+			this.registeredCommands.push(commandId);
 		});
 	}
 
@@ -324,10 +339,11 @@ class TagSelectorModal {
 	
 
 	
-	// 设置位置
+	// 设置位置 - 简化为使用CSS类
 	setPosition(left: number, top: number) {
-		this.rootEl.style.left = `${left}px`;
-		this.rootEl.style.top = `${top}px`;
+		// 我们现在使用固定位置，忽略参数
+		this.rootEl.addClass('tgm-position-element');
+		this.rootEl.addClass('tgm-position-default');
 	}
 	
 	createUI() {
@@ -420,9 +436,9 @@ class TagSelectorModal {
 		const modalHeight = 200; // 标签选择器的高度
 		const padding = 20; // 与窗口边缘的距离
 		
-		// 计算右上角位置，确保不会超出窗口边界
-		this.rootEl.style.left = `${windowWidth - modalWidth - padding}px`;
-		this.rootEl.style.top = `${padding}px`;
+		// 使用固定位置类
+		this.rootEl.addClass('tgm-position-element');
+		this.rootEl.addClass('tgm-position-default');
 	}
 
 	setupDrag() {
@@ -497,9 +513,30 @@ class TagSelectorModal {
 		const newX = e.clientX - this.offsetX;
 		const newY = e.clientY - this.offsetY;
 		
-		// 应用新位置
-		this.rootEl.style.left = `${newX}px`;
-		this.rootEl.style.top = `${newY}px`;
+		// 拖动时切换到可拖动样式
+		this.rootEl.addClass('tgm-position-element');
+		this.rootEl.addClass('tgm-position-draggable');
+		this.rootEl.addClass('tgm-position-grid');
+		// 移除默认位置
+		this.rootEl.removeClass('tgm-position-default');
+		
+		// 移除所有位置类
+		for (let i = 0; i < 20; i++) {
+			this.rootEl.removeClass(`tgm-pos-x-${i}`);
+			this.rootEl.removeClass(`tgm-pos-y-${i}`);
+		}
+		
+		// 计算网格位置
+		const windowWidth = window.innerWidth;
+		const windowHeight = window.innerHeight;
+		
+		// 将绝对像素位置转换为网格索引
+		const xIndex = Math.min(19, Math.max(0, Math.floor((newX / windowWidth) * 20)));
+		const yIndex = Math.min(19, Math.max(0, Math.floor((newY / windowHeight) * 20)));
+		
+		// 应用网格位置类
+		this.rootEl.addClass(`tgm-pos-x-${xIndex}`);
+		this.rootEl.addClass(`tgm-pos-y-${yIndex}`);
 	};
 
 	handleMouseUp = () => {
@@ -598,7 +635,17 @@ class TagSelectorModal {
 						tagEl.setAttribute('data-color', customColor);
 					} else {
 						// 使用传统的自定义颜色样式
-						tagEl.style.setProperty('--custom-tag-color', customColor);
+						tagEl.addClass('tgm-custom-color-tag');
+						
+						// 使用预定义的颜色类
+						const colorClass = getColorClass(customColor);
+						if (colorClass) {
+							tagEl.addClass(colorClass);
+						} else {
+							// 对于自定义颜色，使用数据属性
+							tagEl.setAttribute('data-custom-color', customColor);
+						}
+						
 						tagEl.addClass('custom-colored-tag');
 					}
 				}
@@ -947,23 +994,25 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
             // 创建批量筛选标签的浮动区域
             const batchFilterContainer = popupContainer.createDiv('batch-filter-container');
-            batchFilterContainer.style.display = 'none';
+            batchFilterContainer.addClass('tgm-display-none');
             
             // 批量筛选添加按钮点击事件
             batchFilterBtn.addEventListener('click', async () => {
-                const isVisible = batchFilterContainer.style.display !== 'none';
+                const isVisible = !batchFilterContainer.hasClass('tgm-display-none');
                 
                 if (isVisible) {
                     // 如果筛选界面已显示，则是确认添加操作
-                    batchFilterContainer.style.display = 'none';
-                    batchFilterBtn.style.backgroundColor = '';
+                    batchFilterContainer.addClass('tgm-display-none');
+                    batchFilterContainer.removeClass('tgm-display-block');
+                    batchFilterBtn.removeClass('tgm-btn-active');
                     batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd') || '批量筛选添加';
                     this.display(); // 刷新当前标签组
                 } else {
                     // 显示筛选界面
-                    batchFilterContainer.style.display = 'block';
-                    batchFilterBtn.style.backgroundColor = '#2ecc71';
-                     batchFilterBtn.textContent = i18n.t('settings.addSelectedTags') || '添加选中标签';
+                    batchFilterContainer.removeClass('tgm-display-none');
+                    batchFilterContainer.addClass('tgm-display-block');
+                    batchFilterBtn.addClass('tgm-btn-active');
+                    batchFilterBtn.textContent = i18n.t('settings.addSelectedTags') || '添加选中标签';
                     
                     // 清空并重新加载筛选界面
                     batchFilterContainer.empty();
@@ -1101,8 +1150,9 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
                         }
                         
                         // 隐藏筛选界面并重置按钮
-                        batchFilterContainer.style.display = 'none';
-                        batchFilterBtn.style.backgroundColor = '';
+                        batchFilterContainer.addClass('tgm-display-none');
+                        batchFilterContainer.removeClass('tgm-display-block');
+                        batchFilterBtn.removeClass('tgm-btn-active');
                         batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd') || '批量筛选添加';
                         this.display(); // 刷新当前标签组
                     };
@@ -1111,22 +1161,24 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
             // 创建标签库浮动区域
             const tagLibraryContainer = popupContainer.createDiv('tag-library-container');
-            tagLibraryContainer.style.display = 'none';
+            tagLibraryContainer.addClass('tgm-display-none');
 
             // 从标签库添加按钮点击事件
             addFromLibraryBtn.addEventListener('click', async () => {
-                const isVisible = tagLibraryContainer.style.display !== 'none';
+                const isVisible = !tagLibraryContainer.hasClass('tgm-display-none');
                 
                 if (isVisible) {
                     // 如果标签库已显示，则是确认添加操作
-                    tagLibraryContainer.style.display = 'none';
-                    addFromLibraryBtn.style.backgroundColor = '';
+                    tagLibraryContainer.addClass('tgm-display-none');
+                    tagLibraryContainer.removeClass('tgm-display-block');
+                    addFromLibraryBtn.removeClass('tgm-btn-active');
                     addFromLibraryBtn.textContent = i18n.t('settings.addFromLibrary');
                     this.display(); // 刷新当前标签组
                 } else {
                     // 显示标签库
-                    tagLibraryContainer.style.display = 'block';
-                    addFromLibraryBtn.style.backgroundColor = '#2ecc71';
+                    tagLibraryContainer.removeClass('tgm-display-none');
+                    tagLibraryContainer.addClass('tgm-display-block');
+                    addFromLibraryBtn.addClass('tgm-btn-active');
                     addFromLibraryBtn.textContent = i18n.t('settings.addTag');
                     
                     // 清空并重新加载标签库
@@ -1432,7 +1484,17 @@ class TagGroupView extends ItemView {
                             tagEl.setAttribute('data-color', customColor);
                         } else {
                             // 使用传统的自定义颜色样式
-                            tagEl.style.setProperty('--custom-tag-color', customColor);
+                            tagEl.addClass('tgm-custom-color-tag');
+                            
+                            // 使用预定义的颜色类
+                            const colorClass = getColorClass(customColor);
+                            if (colorClass) {
+                                tagEl.addClass(colorClass);
+                            } else {
+                                // 对于自定义颜色，使用数据属性
+                                tagEl.setAttribute('data-custom-color', customColor);
+                            }
+                            
                             tagEl.addClass('custom-colored-tag');
                         }
                     }
