@@ -228,7 +228,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 		this.settings.tagGroups.forEach(group => {
 			const commandId = `${group.name.toLowerCase().replace(/\s+/g, '-')}`;
 			this.addCommand({
-				id: commandId,
+				id: group.name.toLowerCase().replace(/\s+/g, '-'),
 				name: i18n.t('commands.insertFrom').replace('{groupName}', group.name),
 				editorCallback: (editor: Editor, view: MarkdownView) => {
 					if (group.tags.length > 0) {
