@@ -10,21 +10,22 @@
 
 Tag Group Manager is a plugin designed for Obsidian that helps manage and quickly insert tags. It allows users to create custom tag groups and quickly insert tags into notes through a floating window, improving the efficiency of note organization and classification.
 
-![image](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/image.jpg)
+![image](https://github.com/user-attachments/assets/0e1ab649-68c0-443e-b7a5-6f0ee23aa258)
 
 ## Features
 
 - **Tag Group Management**: Create, edit, and delete custom tag groups
   - Support manual tag addition, meaning the same tag can be added to different groups
   - Support adding from existing tags in your vault with filtering functionality, avoiding duplicates
-  - Support batch filtering to add multiple tags to groups at once
+  - Support batch filtering to add multiple tags to groups at once, activated buttons turn green and display "Confirm Selection" to clearly indicate current state
 - **Floating Tag Selector**: Draggable and pinnable tag selection interface
   - **One-to-one correspondence between tag groups and floating selectors**: Each new tag group registers a floating selector generation command
   - **Quick Tag Insertion**: Quickly call the tag selector through the command palette for insertion, supports YAML area insertion
   - **Auto-dimming After Use**: Used tags switch to a different state to avoid duplicate additions
   - **Smart Insertion Rules**: Automatically detects input environment, uses YAML format in YAML areas, unified #tag format in other input fields
 - **Tag Overview View**: Tag overview page with sorting mode and tag insertion mode
-  - In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting
+  - **Click tag group names to switch modes**: Switch between sorting/insertion modes by clicking any tag group name
+  - In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting, drag handles appear above tag group names
   - In tag insertion mode, click to directly insert tags, supports YAML area insertion
 - **Custom Tag Colors**: Set personalized colors for tags
   - Support regex pattern matching for tag names
@@ -80,9 +81,9 @@ You can also use BRAT by entering https://github.com/Stargazer-cc/obsidian-tag-g
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/3.gif)
 
 ### Tag Overview View
-- Click the star icon in the function area to activate this view
-- Switch between sorting mode and tag insertion mode
-- In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting
+- Click the star icon in the left sidebar to activate this view
+- **Switch modes by clicking tag group names**: Click any tag group name to switch between sorting/insertion modes
+- In sorting mode, supports drag-and-drop sorting of tag groups and cross-group tag sorting, drag handles appear above group names
 - In tag insertion mode, click to directly insert tags, supports YAML area insertion
 
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/6.gif)
@@ -90,6 +91,12 @@ You can also use BRAT by entering https://github.com/Stargazer-cc/obsidian-tag-g
 ## Configuration
 
 In the plugin settings page, you can:
+
+### Important Tips Section
+At the top of the settings page, you'll find a highlighted "Important Tips" section with essential usage information:
+- **Tag Overview View**: Instructions for using the star icon, mode switching, and drag handles
+- **Floating Tag Selector**: Requirements for editable views and refresh methods
+- **Key Operations**: Detailed guidance on refreshing and mode switching behaviors
 
 ### Color Settings
 - **Enable Custom Tag Colors**: Enable to set personalized colors for different tags
@@ -120,7 +127,7 @@ A: You must be in an editable view to call these commands.
 
 **Q: How do I make real-time added tags appear in already open tag selectors and overview pages?**
 
-A: In existing tag selectors: Shift+click the cycle icon to refresh the current selector; In tag overview page: Click any group name in sorting mode to refresh.
+A: In existing tag selectors: Shift+click the cycle icon to refresh the current selector; In tag overview page: Click any tag group name to refresh and switch modes.
 
 **Q: How can I change the color of tag units?**
 
