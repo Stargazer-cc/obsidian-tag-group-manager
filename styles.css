@@ -181,7 +181,12 @@
   text-overflow: ellipsis;
   max-width: 150px; /* 限制宽度约为六个中文字符 */
   display: inline-flex;
+  position: relative;
 }
+
+/* 标签悬停提示 - 使用Obsidian原生的aria-label系统 */
+
+
 
 .tgm-tag-count {
   font-size: 0.8em;
@@ -436,7 +441,6 @@
   line-height: 1.4;
   letter-spacing: 2px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--background-modifier-border);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   cursor: pointer;
@@ -445,34 +449,19 @@
   overflow: hidden;
 }
 
-.state-control-container {
-  display: flex;
-  justify-content: center;
-  padding: 4px 8px;
+/* 标签组视图容器样式 - 仅影响本插件的视图 */
+.workspace-leaf-content[data-type="tag-group-view"] .view-content {
+  padding-top: 0 !important;
+  padding-left: 8px;
 }
 
-.state-toggle-button {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+/* 标签组容器样式 - 确保没有顶部空白 */
+.workspace-leaf-content[data-type="tag-group-view"] .tag-group-container {
+  margin: 0;
+  padding: 0;
 }
 
-.state-toggle-button:hover {
-  background: var(--interactive-accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.state-toggle-button:active {
-  transform: translateY(1px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
+/* 标签组名称可点击切换模式的样式提示 */
 
 .tag-group-name-container .tag-group-name.insert-mode {
   writing-mode: vertical-rl;
@@ -499,9 +488,27 @@
 }
 
 .tag-group-name-container .tag-group-name:hover {
-  color: var(--text-accent);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  transform: translateY(-1px);
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent-hover);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px) scale(1.02);
+}
+
+/* 添加点击提示的伪元素 */
+.tag-group-name-container .tag-group-name::after {
+  content: '💡';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.tag-group-name-container .tag-group-name:hover::after {
+  opacity: 0.8;
 }
 
 .tag-group-name-container .tag-group-name:active {
@@ -575,6 +582,8 @@
   box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
   transition: all 0.1s ease;
 }
+
+
 
 .tags-header-text {
   font-weight: bold;
@@ -746,7 +755,73 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 150px;
+  position: relative;
 }
+
+
+
+.library-tag-item .tag-text::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(1px);
+  border: 6px solid transparent;
+  border-top-color: var(--background-primary);
+  z-index: 1001;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.library-tag-item .tag-text:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* 可配置的标签宽度选项 */
+.tgm-tag-text.width-small {
+  max-width: 100px; /* 约4个中文字符 */
+}
+
+.tgm-tag-text.width-medium {
+  max-width: 150px; /* 约6个中文字符 - 默认 */
+}
+
+.tgm-tag-text.width-large {
+  max-width: 200px; /* 约8个中文字符 */
+}
+
+.tgm-tag-text.width-extra-large {
+  max-width: 300px; /* 约12个中文字符 */
+}
+
+.tgm-tag-text.width-auto {
+  max-width: none; /* 不限制宽度 */
+}
+
+/* 对应的标签库标签宽度选项 */
+.library-tag-item .tag-text.width-small {
+  max-width: 100px;
+}
+
+.library-tag-item .tag-text.width-medium {
+  max-width: 150px;
+}
+
+.library-tag-item .tag-text.width-large {
+  max-width: 200px;
+}
+
+.library-tag-item .tag-text.width-extra-large {
+  max-width: 300px;
+}
+
+.library-tag-item .tag-text.width-auto {
+  max-width: none;
+}
+
+
 
 .library-tag-item .tag-count {
   margin-left: 8px;
@@ -1441,9 +1516,17 @@
   display: block;
 }
 
-/* 按钮状态样式 */
-.tgm-btn-active {
-  background-color: #2ecc71;
+/* 按钮状态样式 - 提高优先级 */
+.library-btn.tgm-btn-active,
+.batch-filter-btn.tgm-btn-active {
+  background-color: #2ecc71 !important;
+  color: white !important;
+}
+
+.library-btn.tgm-btn-active:hover,
+.batch-filter-btn.tgm-btn-active:hover {
+  background-color: #27ae60 !important;
+  color: white !important;
 }
 
 .tgm-btn-default {
@@ -1487,4 +1570,92 @@
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   background-color: var(--background-primary);
+}
+
+/* 重要Tips区域样式 */
+.tgm-tips-container {
+  margin: 0 0 30px 0;
+  padding: 20px;
+  background: linear-gradient(135deg, var(--background-secondary), var(--background-primary));
+  border: 2px solid var(--interactive-accent);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.tgm-tips-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
+  background-size: 300% 100%;
+  animation: rainbow-border 3s ease-in-out infinite;
+}
+
+@keyframes rainbow-border {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.tgm-tips-header {
+  margin: 0 0 16px 0 !important;
+  color: var(--text-accent) !important;
+  font-size: 1.3em !important;
+  font-weight: 600 !important;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.tgm-tips-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.tgm-tips-section {
+  background: var(--background-primary);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.tgm-tips-section-title {
+  margin: 0 0 12px 0 !important;
+  color: var(--text-accent) !important;
+  font-size: 1.1em !important;
+  font-weight: 500 !important;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--interactive-accent);
+}
+
+.tgm-tips-list {
+  margin: 0 !important;
+  padding-left: 20px !important;
+  color: var(--text-normal);
+  line-height: 1.6;
+}
+
+.tgm-tips-list li {
+  margin: 8px 0 !important;
+  padding: 4px 0;
+  position: relative;
+}
+
+.tgm-tips-list li::marker {
+  color: var(--interactive-accent);
+  font-weight: bold;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .tgm-tips-content {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
 }

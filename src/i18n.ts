@@ -11,7 +11,26 @@ export interface I18nStrings {
     groupName: string;
     addTag: string;
     addFromLibrary: string;
+    batchFilterAdd: string;
+    addSelectedTags: string;
+    confirmSelection: string;
+    filterTagsPlaceholder: string;
+    selectAll: string;
+    deselectAll: string;
+    noMatchingTags: string;
+    selectAtLeastOneTag: string;
+    tagsAddedSuccess: string;
+    noNewTagsAdded: string;
     deleteGroup: string;
+    importantTips: string;
+    tagOverviewTips: string;
+    floatingTagSelectorTips: string;
+    tip1: string;
+    tip2: string;
+    tip3: string;
+    tip4: string;
+    tip5: string;
+    tip6: string;
     deleteGroupConfirm: string;
     enterTagName: string;
     enterGroupName: string;
@@ -29,6 +48,10 @@ export interface I18nStrings {
     title: string;
     sortMode: string;
     insertMode: string;
+    insertModeTitle: string;
+    sortModeTitle: string;
+    doubleClickToSwitch: string;
+    clickToSwitch: string;
     refresh: string;
   };
   commands: {
@@ -57,9 +80,13 @@ export interface I18nStrings {
 export class I18n {
   private static instance: I18n;
   private currentLocale: string;
+  private listeners: Array<() => void> = [];
 
   private constructor() {
-    this.currentLocale = moment.locale() || 'en';
+    // 尝试从多个来源获取语言设置
+    const momentLocale = moment.locale() || 'en';
+    // 如果是中文相关的locale，使用中文，否则使用英文
+    this.currentLocale = momentLocale.startsWith('zh') ? 'zh' : 'en';
   }
 
   public static getInstance(): I18n {
@@ -77,7 +104,7 @@ export class I18n {
       if (value && typeof value === 'object' && k in value) {
         value = value[k];
       } else {
-        console.warn(`Translation key not found: ${key}`);
+        // console.warn(`Translation key not found: ${key}`);
         return key;
       }
     }
@@ -89,9 +116,35 @@ export class I18n {
     try {
       return this.currentLocale === 'zh' ? zh : en;
     } catch (e) {
-      console.warn(`Locale ${this.currentLocale} not found, falling back to English`);
+      // console.warn(`Locale ${this.currentLocale} not found, falling back to English`);
       return en;
     }
+  }
+
+  public setLocale(locale: string): void {
+    if (this.currentLocale !== locale) {
+      this.currentLocale = locale;
+      this.notifyListeners();
+    }
+  }
+
+  public getLocale(): string {
+    return this.currentLocale;
+  }
+
+  public addChangeListener(listener: () => void): void {
+    this.listeners.push(listener);
+  }
+
+  public removeChangeListener(listener: () => void): void {
+    const index = this.listeners.indexOf(listener);
+    if (index > -1) {
+      this.listeners.splice(index, 1);
+    }
+  }
+
+  private notifyListeners(): void {
+    this.listeners.forEach(listener => listener());
   }
 }
 

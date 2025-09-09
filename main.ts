@@ -653,7 +653,18 @@ class TagSelectorModal {
 
 			// 创建标签文本容器
 			const tagTextEl = tagEl.createDiv('tgm-tag-text');
-			tagTextEl.setText(tag);
+
+			// 检查是否为嵌套标签并添加图标
+			let displayText = tag;
+			if (tag.includes('/')) {
+				displayText = `📁 ${tag}`;
+				tagTextEl.addClass('nested-tag');
+			}
+
+			tagTextEl.setText(displayText);
+
+			// 使用Obsidian原生的tooltip系统，设置在整个标签项上
+			tagEl.setAttribute('aria-label', tag);
 			
 			// 添加标签计数
 			const tagCountEl = tagEl.createDiv('tgm-tag-count');
@@ -857,6 +868,39 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
+		// ==================== 重要Tips区域 ====================
+		const tipsContainer = containerEl.createDiv('tgm-tips-container');
+		const tipsHeader = tipsContainer.createEl('h3', {
+			text: i18n.t('settings.importantTips'),
+			cls: 'tgm-tips-header'
+		});
+
+		const tipsContent = tipsContainer.createDiv('tgm-tips-content');
+
+		// 标签总览视图部分
+		const overviewSection = tipsContent.createDiv('tgm-tips-section');
+		const overviewTitle = overviewSection.createEl('h4', {
+			text: i18n.t('settings.tagOverviewTips'),
+			cls: 'tgm-tips-section-title'
+		});
+
+		const overviewList = overviewSection.createEl('ol', { cls: 'tgm-tips-list' });
+		overviewList.createEl('li', { text: i18n.t('settings.tip1') });
+		overviewList.createEl('li', { text: i18n.t('settings.tip2') });
+		overviewList.createEl('li', { text: i18n.t('settings.tip3') });
+
+		// 浮动标签选择器部分
+		const selectorSection = tipsContent.createDiv('tgm-tips-section');
+		const selectorTitle = selectorSection.createEl('h4', {
+			text: i18n.t('settings.floatingTagSelectorTips'),
+			cls: 'tgm-tips-section-title'
+		});
+
+		const selectorList = selectorSection.createEl('ol', { cls: 'tgm-tips-list' });
+		selectorList.createEl('li', { text: i18n.t('settings.tip4') });
+		selectorList.createEl('li', { text: i18n.t('settings.tip5') });
+		selectorList.createEl('li', { text: i18n.t('settings.tip6') });
+
 		// ==================== 颜色设置区域 ====================
 		this.renderColorSettings(containerEl);
 
@@ -950,7 +994,18 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				const tagEl = tagsList.createDiv('tgm-tag-item');
 				
 				const tagText = tagEl.createSpan('tgm-tag-text');
-				tagText.setText(`#${tag}`);
+
+				// 检查是否为嵌套标签并添加图标
+				let displayText = `#${tag}`;
+				if (tag.includes('/')) {
+					displayText = `📁 #${tag}`;
+					tagText.addClass('nested-tag');
+				}
+
+				tagText.setText(displayText);
+
+				// 使用Obsidian原生的tooltip系统，设置在整个标签项上
+				tagEl.setAttribute('aria-label', `#${tag}`);
 				
 				const deleteBtn = tagEl.createSpan('tgm-tag-delete-btn');
 				deleteBtn.setText('✕');
@@ -1008,11 +1063,21 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
                     batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd') || '批量筛选添加';
                     this.display(); // 刷新当前标签组
                 } else {
+                    // 关闭标签库（如果打开的话）
+                    const tagLibraryContainer = tagsContainer.querySelector('.tag-library-container') as HTMLElement;
+                    const addFromLibraryBtn = tagsContainer.querySelector('.library-btn') as HTMLElement;
+                    if (tagLibraryContainer && addFromLibraryBtn) {
+                        tagLibraryContainer.addClass('tgm-display-none');
+                        tagLibraryContainer.removeClass('tgm-display-block');
+                        addFromLibraryBtn.removeClass('tgm-btn-active');
+                        addFromLibraryBtn.textContent = i18n.t('settings.addFromLibrary');
+                    }
+
                     // 显示筛选界面
                     batchFilterContainer.removeClass('tgm-display-none');
                     batchFilterContainer.addClass('tgm-display-block');
                     batchFilterBtn.addClass('tgm-btn-active');
-                    batchFilterBtn.textContent = i18n.t('settings.addSelectedTags') || '添加选中标签';
+                    batchFilterBtn.textContent = i18n.t('settings.confirmSelection') || '确认选择';
                     
                     // 清空并重新加载筛选界面
                     batchFilterContainer.empty();
@@ -1073,17 +1138,31 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
                         
                         filteredTags.forEach(tag => {
                             const tagEl = filteredTagsContainer.createDiv('library-tag-item');
-                            tagEl.setText(tag);
                             tagEl.setAttribute('data-tag', tag);
-                            
+
+                            // 创建标签文本容器
+                            const tagTextEl = tagEl.createSpan('tag-text');
+
+                            // 检查是否为嵌套标签并添加图标
+                            let displayText = tag;
+                            if (tag.includes('/')) {
+                                displayText = `📁 ${tag}`;
+                                tagTextEl.addClass('nested-tag');
+                            }
+
+                            tagTextEl.setText(displayText);
+
+                            // 使用Obsidian原生的tooltip系统，设置在整个标签项上
+                            tagEl.setAttribute('aria-label', tag);
+
                             // 默认选中所有筛选出的标签
                             if (isAllSelected) {
                                 tagEl.addClass('selected');
                             }
-                            
+
                             tagEl.addEventListener('click', () => {
                                 tagEl.toggleClass('selected', true);
-                                
+
                                 // 更新全选按钮状态
                                 const allTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item');
                                 const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
@@ -1175,11 +1254,21 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
                     addFromLibraryBtn.textContent = i18n.t('settings.addFromLibrary');
                     this.display(); // 刷新当前标签组
                 } else {
+                    // 关闭批量筛选（如果打开的话）
+                    const batchFilterContainer = tagsContainer.querySelector('.batch-filter-container') as HTMLElement;
+                    const batchFilterBtn = tagsContainer.querySelector('.batch-filter-btn') as HTMLElement;
+                    if (batchFilterContainer && batchFilterBtn) {
+                        batchFilterContainer.addClass('tgm-display-none');
+                        batchFilterContainer.removeClass('tgm-display-block');
+                        batchFilterBtn.removeClass('tgm-btn-active');
+                        batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd');
+                    }
+
                     // 显示标签库
                     tagLibraryContainer.removeClass('tgm-display-none');
                     tagLibraryContainer.addClass('tgm-display-block');
                     addFromLibraryBtn.addClass('tgm-btn-active');
-                    addFromLibraryBtn.textContent = i18n.t('settings.addTag');
+                    addFromLibraryBtn.textContent = i18n.t('settings.confirmSelection');
                     
                     // 清空并重新加载标签库
                     tagLibraryContainer.empty();
@@ -1208,7 +1297,22 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
                     // 创建标签选择界面
                     availableTags.forEach(tag => {
                         const tagEl = tagLibraryContainer.createDiv('library-tag-item');
-                        tagEl.setText(tag);
+
+                        // 创建标签文本容器
+                        const tagTextEl = tagEl.createSpan('tag-text');
+
+                        // 检查是否为嵌套标签并添加图标
+                        let displayText = tag;
+                        if (tag.includes('/')) {
+                            displayText = `📁 ${tag}`;
+                            tagTextEl.addClass('nested-tag');
+                        }
+
+                        tagTextEl.setText(displayText);
+
+                        // 使用Obsidian原生的tooltip系统，设置在整个标签项上
+                        tagEl.setAttribute('aria-label', tag);
+
                         tagEl.addEventListener('click', async () => {
                             // 添加标签到组
                             if (!this.plugin.settings.tagGroups[index].tags.includes(tag)) {
@@ -1413,17 +1517,7 @@ class TagGroupView extends ItemView {
         const container = this.containerEl.children[1];
         container.empty();
 
-        // 创建状态切换按钮容器
-        const stateControlContainer = container.createDiv('state-control-container');
-        const stateToggleBtn = stateControlContainer.createEl('button', {
-            text: this.isInsertMode ? i18n.t('overview.sortMode') : i18n.t('overview.insertMode'),
-            cls: 'state-toggle-button'
-        });
-
-        stateToggleBtn.addEventListener('click', () => {
-            this.isInsertMode = !this.isInsertMode;
-            this.renderTagGroups();
-        });
+        // 不再需要顶部标题栏，直接通过点击标签组名称切换模式
 
         // 创建标签组容器
         const groupContainer = container.createDiv('tag-group-container');
@@ -1448,20 +1542,24 @@ class TagGroupView extends ItemView {
             if (this.isInsertMode) {
                 nameEl.addClass('insert-mode');
             }
+
+            // 添加tooltip提示用户可以点击切换模式
+            const nextModeText = this.isInsertMode ? i18n.t('overview.sortMode') : i18n.t('overview.insertMode');
+            nameEl.setAttribute('aria-label', i18n.t('overview.clickToSwitch').replace('{mode}', nextModeText));
             
-            // 添加点击事件处理
-            if (!this.isInsertMode) {
-                // 在排序模式下，点击标签组名称刷新标签组
-                nameEl.addEventListener('click', () => {
-                    this.renderTagGroups();
-                    new Notice(i18n.t('overview.refresh') + `: ${group.name}`);
-                });
-            } else {
-                // 在插入模式下，点击标签组名称显示提示
-                nameEl.addEventListener('click', () => {
-                    new Notice(i18n.t('commands.insertHere'));
-                });
-            }
+            // 添加点击事件处理 - 点击任意标签组名称切换模式
+            nameEl.addEventListener('click', () => {
+                this.isInsertMode = !this.isInsertMode;
+
+                // 在右上角显示模式切换提示
+                const modeText = this.isInsertMode ? i18n.t('overview.insertModeTitle') : i18n.t('overview.sortModeTitle');
+                const modeIcon = this.isInsertMode ? '✏️' : '🔄';
+
+                new Notice(`${modeIcon} ${modeText}`, 2000);
+
+                // 重新渲染标签组
+                this.renderTagGroups();
+            });
 
             // 创建标签容器
             const tagsContainer = groupEl.createDiv('tags-view-container');
@@ -1470,8 +1568,22 @@ class TagGroupView extends ItemView {
             group.tags.forEach(tag => {
 
                 const tagEl = tagsContainer.createDiv('tgm-tag-item');
-                tagEl.setText(tag);
                 tagEl.setAttribute('data-tag', tag);
+
+                // 创建标签文本容器
+                const tagTextEl = tagEl.createDiv('tgm-tag-text');
+
+                // 检查是否为嵌套标签并添加图标
+                let displayText = tag;
+                if (tag.includes('/')) {
+                    displayText = `📁 ${tag}`;
+                    tagTextEl.addClass('nested-tag');
+                }
+
+                tagTextEl.setText(displayText);
+
+                // 使用Obsidian原生的tooltip系统，设置在整个标签项上
+                tagEl.setAttribute('aria-label', tag);
 
                 // 应用自定义颜色（如果启用且有匹配的颜色映射）
                 if (this.plugin.settings.enableCustomColors) {
