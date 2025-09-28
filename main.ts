@@ -190,17 +190,13 @@ export default class TagGroupManagerPlugin extends Plugin {
 				new Notice(i18n.t('messages.tagsCleared') + ' (' + i18n.t('messages.supportsUndo') + ')');
 			} else {
 				// 如果无法打开文件到编辑器，则使用原来的方法
-				// 读取文件内容
-				const content = await this.app.vault.read(file);
-				
-				// 使用正则表达式移除所有标签
-				let newContent = content.replace(/#[\w\u4e00-\u9fa5\-_/]+/g, '');
-				
-				// 删除上下文标签之间的空格
-				newContent = newContent.replace(/\n\s*\n/g, '\n');
-				
-				// 写入修改后的内容
-				await this.app.vault.modify(file, newContent);
+				await this.app.vault.process(file, (content) => {
+					// 使用正则表达式移除所有标签
+					let newContent = content.replace(/#[\w\u4e00-\u9fa5\-_/]+/g, '');
+					// 删除上下文标签之间的空格
+					newContent = newContent.replace(/\n\s*\n/g, '\n');
+					return newContent;
+				});
 				
 				// 显示成功通知
 				new Notice(i18n.t('messages.tagsCleared'));
@@ -870,19 +866,13 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		// ==================== 重要Tips区域 ====================
 		const tipsContainer = containerEl.createDiv('tgm-tips-container');
-		const tipsHeader = tipsContainer.createEl('h3', {
-			text: i18n.t('settings.importantTips'),
-			cls: 'tgm-tips-header'
-		});
+		new Setting(tipsContainer).setName(i18n.t('settings.importantTips')).setHeading();
 
 		const tipsContent = tipsContainer.createDiv('tgm-tips-content');
 
 		// 标签总览视图部分
 		const overviewSection = tipsContent.createDiv('tgm-tips-section');
-		const overviewTitle = overviewSection.createEl('h4', {
-			text: i18n.t('settings.tagOverviewTips'),
-			cls: 'tgm-tips-section-title'
-		});
+		new Setting(overviewSection).setName(i18n.t('settings.tagOverviewTips')).setHeading();
 
 		const overviewList = overviewSection.createEl('ol', { cls: 'tgm-tips-list' });
 		overviewList.createEl('li', { text: i18n.t('settings.tip1') });
@@ -891,10 +881,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		// 浮动标签选择器部分
 		const selectorSection = tipsContent.createDiv('tgm-tips-section');
-		const selectorTitle = selectorSection.createEl('h4', {
-			text: i18n.t('settings.floatingTagSelectorTips'),
-			cls: 'tgm-tips-section-title'
-		});
+		new Setting(selectorSection).setName(i18n.t('settings.floatingTagSelectorTips')).setHeading();
 
 		const selectorList = selectorSection.createEl('ol', { cls: 'tgm-tips-list' });
 		selectorList.createEl('li', { text: i18n.t('settings.tip4') });
@@ -913,7 +900,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 	// 渲染颜色设置区域
 	renderColorSettings(containerEl: HTMLElement): void {
 		const colorSection = containerEl.createDiv('settings-section');
-		colorSection.createEl('h3', { text: i18n.t('settings.colorSettings') || '颜色设置', cls: 'settings-section-title' });
+		new Setting(colorSection).setName(i18n.t('settings.colorSettings') || '颜色设置').setHeading();
 
 		// 添加自定义颜色功能开关
 		new Setting(colorSection)
@@ -937,7 +924,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 	// 渲染标签组设置区域
 	renderTagGroupSettings(containerEl: HTMLElement): void {
 		const tagGroupSection = containerEl.createDiv('settings-section');
-		tagGroupSection.createEl('h3', { text: i18n.t('settings.tagGroupSettings') || '标签组管理', cls: 'settings-section-title' });
+		new Setting(tagGroupSection).setName(i18n.t('settings.tagGroupSettings') || '标签组管理').setHeading();
 
 		// 添加新标签组的按钮
 		new Setting(tagGroupSection)
@@ -1366,7 +1353,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 	renderColorMappingSettings(containerEl: HTMLElement): void {
 		// 创建颜色映射子区域
 		const colorMappingSection = containerEl.createDiv('color-mapping-subsection');
-		colorMappingSection.createEl('h4', { text: i18n.t('settings.tagColorMappings'), cls: 'settings-subsection-title' });
+		new Setting(colorMappingSection).setName(i18n.t('settings.tagColorMappings')).setHeading();
 
 		// 添加说明文字
 		const descEl = colorMappingSection.createEl('p', {
