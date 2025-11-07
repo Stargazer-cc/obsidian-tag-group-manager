@@ -98,25 +98,25 @@ export class I18n {
 
   public t(key: string): string {
     const keys = key.split('.');
-    let value: any = this.getTranslations();
+    let current: Record<string, unknown> | string = this.getTranslations();
 
     for (const k of keys) {
-      if (value && typeof value === 'object' && k in value) {
-        value = value[k];
+      if (typeof current === 'object' && current !== null && k in current) {
+        current = (current as Record<string, unknown>)[k];
       } else {
         // console.warn(`Translation key not found: ${key}`);
         return key;
       }
     }
 
-    return value as string;
+    return current as string;
   }
 
   private getTranslations(): I18nStrings {
     try {
       return this.currentLocale === 'zh' ? zh : en;
     } catch (e) {
-      // console.warn(`Locale ${this.currentLocale} not found, falling back to English`);
+      console.warn(`Locale ${this.currentLocale} not found, falling back to English`, e);
       return en;
     }
   }

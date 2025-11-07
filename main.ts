@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, moment } from 'obsidian';
+import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, moment, TFile } from 'obsidian';
 import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
 import { getAllTags } from "obsidian";
@@ -127,7 +127,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 		);
 
 		// 添加星星按钮到右侧边栏
-		const starButton = this.addRibbonIcon('star', i18n.t('overview.title'), async () => {
+		this.addRibbonIcon('star', i18n.t('overview.title'), async () => {
 			// 激活标签组管理器视图
 			await this.activateView();
 			// 关闭所有已打开的标签选择器
@@ -150,7 +150,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 							.setTitle(i18n.t('commands.clearTags'))
 							.setIcon('tag')
 							.onClick(async () => {
-								await this.clearAllTags(file);
+								await this.clearAllTags(file as TFile);
 							});
 					});
 				}
@@ -159,7 +159,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 	}
 
 	// 清除笔记中的所有标签
-	async clearAllTags(file: any) {
+	async clearAllTags(file: TFile) {
 		try {
 			// 先尝试打开文件到当前视图
 			let activeLeaf = this.app.workspace.getLeaf();
@@ -201,9 +201,12 @@ export default class TagGroupManagerPlugin extends Plugin {
 				// 显示成功通知
 				new Notice(i18n.t('messages.tagsCleared'));
 			}
-		} catch (error) {
-			// console.error('清除标签时出错:', error);
-			new Notice(i18n.t('messages.tagsClearFailed') + ': ' + error);
+		} catch (e) {
+			if (e instanceof Error) {
+				new Notice(i18n.t('messages.tagsClearFailed') + ': ' + e.message);
+			} else {
+				new Notice(i18n.t('messages.tagsClearFailed'));
+			}
 		}
 	}
 
@@ -322,9 +325,14 @@ class TagSelectorModal {
 		this.setupDrag();
 		
 		// 异步设置搜索框监听器
-		this.setupSearchBoxListener().catch(() => {
-			// 静默处理错误
-		});
+		(async () => {
+			try {
+				await this.setupSearchBoxListener();
+			} catch (e) {
+				// 静默处理错误
+				console.error("Error setting up search box listener:", e);
+			}
+		})();
 	}
 
 	open() {
@@ -426,11 +434,6 @@ class TagSelectorModal {
 		this.containerEl = this.rootEl.createDiv('tag-selector-container');
 		
 		// 设置初始位置（右上角）
-		const windowWidth = window.innerWidth;
-		const windowHeight = window.innerHeight;
-		const modalWidth = 300; // 标签选择器的宽度
-		const modalHeight = 200; // 标签选择器的高度
-		const padding = 20; // 与窗口边缘的距离
 		
 		// 使用固定位置类
 		this.rootEl.addClass('tgm-position-element');
@@ -547,7 +550,7 @@ class TagSelectorModal {
 	// 验证标签是否符合语法规则
 	isValidTag(tag: string): boolean {
 		// 检查标签是否以.开头或包含其他不符合语法的字符
-		return !!tag && tag.length > 0 && !/^\.|[\s\[\]\(\)\{\}\<\>\#\:\;\,\'\"\?\=\+\`\~\!\@\$\%\^\&\*]/.test(tag);
+		return !!tag && tag.length > 0 && !/^\.|[\s\[\](){}<>#:;,\'"?=+`~!@$%^&*]/.test(tag);
 	}
 	
 	// 查找当前标签组
@@ -1315,7 +1318,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			// 验证标签是否符合语法规则的函数
 			const isValidTag = (tag: string): boolean => {
 				// 检查标签是否以.开头或包含其他不符合语法的字符
-				return !!tag && tag.length > 0 && !/^\.|[\s\[\]\(\)\{\}\<\>\#\:\;\,\'\"\?\=\+\`\~\!\@\$\%\^\&\*]/.test(tag);
+				return !!tag && tag.length > 0 && !/^\.|[\s\[\](){}<>#:;,\'"?=+`~!@$%^&*]/.test(tag);
 			};
 
 			addTagBtn.addEventListener('click', async () => {
@@ -1475,8 +1478,8 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 // 标签组视图
 class TagGroupView extends ItemView {
     plugin: TagGroupManagerPlugin;
-    private groupSortable: any;
-    private tagSortables: any[] = [];
+    private groupSortable: Sortable;
+    private tagSortables: Sortable[] = [];
     private isInsertMode: boolean = false;
 
     constructor(leaf: WorkspaceLeaf, plugin: TagGroupManagerPlugin) {
