@@ -9,7 +9,7 @@ function insertTagIntoInputElement(inputElement: HTMLInputElement, tag: string, 
     const cursorPos = inputElement.selectionStart ?? 0;
     const currentValue = inputElement.value;
     
-    let tagToInsert = addHashPrefix ? `#${tag}` : tag;
+    const tagToInsert = addHashPrefix ? `#${tag}` : tag;
     
     // Add leading space if necessary
     const prefix = (cursorPos > 0 && currentValue[cursorPos - 1] !== ' ' && currentValue.length > 0) ? ' ' : '';
@@ -80,9 +80,9 @@ function getTagColor(tagName: string, colorMappings: TagColorMapping[]): string 
 					return mapping.color;
 				}
 			}
-		} catch (error) {
+		} catch {
 			// 正则表达式错误时跳过此映射
-			// console.warn(`Invalid regex pattern in tag color mapping: ${mapping.pattern}`, error);
+			// console.warn(`Invalid regex pattern in tag color mapping: ${mapping.pattern}`);
 			continue;
 		}
 	}
@@ -127,9 +127,9 @@ export default class TagGroupManagerPlugin extends Plugin {
 		);
 
 		// 添加星星按钮到右侧边栏
-		this.addRibbonIcon('star', i18n.t('overview.title'), async () => {
+		this.addRibbonIcon('star', i18n.t('overview.title'), () => {
 			// 激活标签组管理器视图
-			await this.activateView();
+			void this.activateView();
 			// 关闭所有已打开的标签选择器
 			
 		});
@@ -144,13 +144,13 @@ export default class TagGroupManagerPlugin extends Plugin {
 		// 添加右键菜单命令：清除笔记中的所有标签
 		this.registerEvent(
 			this.app.workspace.on('file-menu', (menu, file) => {
-				if (file) {
+				if (file instanceof TFile) {
 					menu.addItem((item) => {
 						item
 							.setTitle(i18n.t('commands.clearTags'))
 							.setIcon('tag')
-							.onClick(async () => {
-								await this.clearAllTags(file as TFile);
+							.onClick(() => {
+								void this.clearAllTags(file);
 							});
 					});
 				}
@@ -162,7 +162,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 	async clearAllTags(file: TFile) {
 		try {
 			// 先尝试打开文件到当前视图
-			let activeLeaf = this.app.workspace.getLeaf();
+			const activeLeaf = this.app.workspace.getLeaf();
 			if (activeLeaf) {
 				await activeLeaf.openFile(file);
 			}
@@ -229,7 +229,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 			this.addCommand({
 				id: group.name.toLowerCase().replace(/\s+/g, '-'),
 				name: i18n.t('commands.insertFrom').replace('{groupName}', group.name),
-				editorCallback: (editor: Editor, view: MarkdownView) => {
+				editorCallback: (editor: Editor, _view: MarkdownView) => {
 					if (group.tags.length > 0) {
 						new TagSelectorModal(this.app, editor, group.tags.slice(), this).open();
 					} else {
@@ -266,7 +266,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 		let leaf: WorkspaceLeaf | null = null;
 
 		// 查找已存在的视图
-		for (let l of workspace.getLeavesOfType(TAG_GROUP_VIEW)) {
+		for (const l of workspace.getLeavesOfType(TAG_GROUP_VIEW)) {
 			leaf = l;
 			break;
 		}
@@ -344,7 +344,7 @@ class TagSelectorModal {
 
 	
 	// 设置位置 - 简化为使用CSS类
-	setPosition(left: number, top: number) {
+	setPosition(_left: number, _top: number) {
 		// 我们现在使用固定位置，忽略参数
 		this.rootEl.addClass('tgm-position-element');
 		this.rootEl.addClass('tgm-position-default');
@@ -375,50 +375,52 @@ class TagSelectorModal {
 		// 使用aria-label属性代替title和setTooltip，并标注当前循环模式的开关状态
 		infiniteButton.setAttribute('aria-label', i18n.t('messages.cycleButtonTooltip'));
 		// 移除使用plugins属性的代码
-		infiniteButton.addEventListener('click', async (e: MouseEvent) => {
-			// 如果按住Shift键点击，则更新标签组
-			if (this.plugin && e.shiftKey) {
-				// 先重新加载插件设置，确保获取最新数据
-				await this.plugin.loadSettings();
-				
-				// 查找当前标签组
-				const currentGroup = this.findCurrentTagGroup();
-				if (currentGroup) {
-					// 更新原始标签列表
-					this.originalTags = [...currentGroup.tags];
+		infiniteButton.addEventListener('click', (e: MouseEvent) => {
+			void (async () => {
+				// 如果按住Shift键点击，则更新标签组
+				if (this.plugin && e.shiftKey) {
+					// 先重新加载插件设置，确保获取最新数据
+					await this.plugin.loadSettings();
 					
-					// 找出新添加的标签（在原始标签中但不在当前标签中的）
-					const newTags = currentGroup.tags.filter(tag => !this.tags.includes(tag));
-					
-					// 将新标签添加到当前标签列表
-					this.tags = [...this.tags, ...newTags];
-					
-					// 显示通知
-					if (newTags.length > 0) {
-						new Notice(i18n.t('messages.tagGroupUpdated').replace('{count}', newTags.length.toString()));
+					// 查找当前标签组
+					const currentGroup = this.findCurrentTagGroup();
+					if (currentGroup) {
+						// 更新原始标签列表
+						this.originalTags = [...currentGroup.tags];
+						
+						// 找出新添加的标签（在原始标签中但不在当前标签中的）
+						const newTags = currentGroup.tags.filter(tag => !this.tags.includes(tag));
+						
+						// 将新标签添加到当前标签列表
+						this.tags = [...this.tags, ...newTags];
+						
+						// 显示通知
+						if (newTags.length > 0) {
+							new Notice(i18n.t('messages.tagGroupUpdated').replace('{count}', newTags.length.toString()));
+						} else {
+							new Notice(i18n.t('messages.tagGroupUpToDate'));
+						}
 					} else {
-						new Notice(i18n.t('messages.tagGroupUpToDate'));
+						new Notice(i18n.t('messages.noMatchingTagGroup'));
 					}
 				} else {
-					new Notice(i18n.t('messages.noMatchingTagGroup'));
+					// 原有的循环模式逻辑
+					this.isInfiniteMode = !this.isInfiniteMode;
+					
+					if (this.isInfiniteMode) {
+						// 启用循环模式时，恢复所有原始标签
+						this.tags = [...this.originalTags];
+						infiniteButton.addClass('active');
+						infiniteButton.setAttribute('aria-label', i18n.t('messages.cycleButtonTooltip1'));
+					} else {
+						infiniteButton.removeClass('active');
+						infiniteButton.setAttribute('aria-label', i18n.t('messages.cycleButtonTooltip2'));
+					}
 				}
-			} else {
-				// 原有的循环模式逻辑
-				this.isInfiniteMode = !this.isInfiniteMode;
 				
-				if (this.isInfiniteMode) {
-					// 启用循环模式时，恢复所有原始标签
-					this.tags = [...this.originalTags];
-					infiniteButton.addClass('active');
-					infiniteButton.setAttribute('aria-label', i18n.t('messages.cycleButtonTooltip1'));
-				} else {
-					infiniteButton.removeClass('active');
-					infiniteButton.setAttribute('aria-label', i18n.t('messages.cycleButtonTooltip2'));
-				}
-			}
-			
-			// 重新渲染标签列表
-			this.renderTags();
+				// 重新渲染标签列表
+				this.renderTags();
+			})();
 		});
 		
 	
@@ -550,7 +552,7 @@ class TagSelectorModal {
 	// 验证标签是否符合语法规则
 	isValidTag(tag: string): boolean {
 		// 检查标签是否以.开头或包含其他不符合语法的字符
-		return !!tag && tag.length > 0 && !/^\.|[\s\[\](){}<>#:;,\'"?=+`~!@$%^&*]/.test(tag);
+		return !!tag && tag.length > 0 && !/^\.|[\s[](){}<>#:;,'"?=+`~!@$%^&*]/.test(tag);
 	}
 	
 	// 查找当前标签组
@@ -594,7 +596,7 @@ class TagSelectorModal {
 	}
 
 	// 获取标签使用次数
-	async getTagCount(tag: string): Promise<number> {
+	getTagCount(tag: string): number {
 		const files = this.app.vault.getMarkdownFiles();
 		let count = 0;
 		
@@ -609,7 +611,7 @@ class TagSelectorModal {
 		return count;
 	}
 
-	async renderTags() {
+	renderTags() {
 		// 清空容器
 		this.containerEl.empty();
 		
@@ -667,15 +669,15 @@ class TagSelectorModal {
 			
 			// 添加标签计数
 			const tagCountEl = tagEl.createDiv('tgm-tag-count');
-			const count = await this.getTagCount(tag);
+			const count = this.getTagCount(tag);
 			tagCountEl.setText(`${count}`);
 			tagCountEl.setAttribute('aria-label', i18n.t('messages.tagcounttip').replace('{count}', count.toString()));
 			
 			// 添加点击事件
-			tagEl.addEventListener('mousedown', async (e) => {
+			tagEl.addEventListener('mousedown', (e) => {
 				// Check for PCards input field first
-				const pcardsTagInput = document.querySelector('form.quick-note-form input#tags') as HTMLInputElement;
-				if (pcardsTagInput) {
+				const pcardsTagInput = document.querySelector('form.quick-note-form input#tags');
+				if (pcardsTagInput instanceof HTMLInputElement) {
 					e.preventDefault();
 					e.stopPropagation();
 					if (!isValid) return;
@@ -687,8 +689,8 @@ class TagSelectorModal {
 					}
 					// Update count display
 					tagCountEl.setText(`${count + 1}`);
-					setTimeout(async () => {
-						const newCount = await this.getTagCount(tag);
+					setTimeout(() => {
+						const newCount = this.getTagCount(tag);
 						tagCountEl.setText(`${newCount}`);
 					}, 3000);
 					return; // Exit if PCards input is handled
@@ -835,8 +837,8 @@ class TagSelectorModal {
 				tagCountEl.setText(`${count + 1}`);
 				
 				// 等待元数据缓存更新后再次刷新计数
-				setTimeout(async () => {
-					const newCount = await this.getTagCount(tag);
+				setTimeout(() => {
+					const newCount = this.getTagCount(tag);
 					tagCountEl.setText(`${newCount}`);
 				}, 3000); // 将延迟时间增加到3秒，给予元数据缓存更多的更新时间
 			});
@@ -911,10 +913,11 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			.setDesc(i18n.t('settings.enableCustomColorsDesc'))
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.enableCustomColors)
-				.onChange(async (value) => {
+				.onChange((value) => {
 					this.plugin.settings.enableCustomColors = value;
-					await this.plugin.saveSettings();
-					this.display(); // 重新渲染设置页面
+					void this.plugin.saveSettings().then(() => {
+						this.display(); // 重新渲染设置页面
+					});
 				})
 			);
 
@@ -935,13 +938,14 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			.setDesc(i18n.t('settings.enterGroupName'))
 			.addButton(cb => cb
 				.setButtonText(i18n.t('settings.addGroup'))
-				.onClick(async () => {
+				.onClick(() => {
 					this.plugin.settings.tagGroups.push({
 						name: i18n.t('settings.groupName'),
 						tags: []
 					});
-					await this.plugin.saveSettings();
-					this.display();
+					void this.plugin.saveSettings().then(() => {
+						this.display();
+					});
 				}));
 
 		// 显示现有标签组
@@ -962,9 +966,9 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				cls: 'tgm-group-name-input'
 			});
 
-			groupNameInput.addEventListener('change', async () => {
+			groupNameInput.addEventListener('change', () => {
 				this.plugin.settings.tagGroups[index].name = groupNameInput.value;
-				await this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			});
 
 			const deleteGroupBtn = groupHeaderContainer.createEl('button', {
@@ -972,10 +976,11 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				cls: 'tgm-delete-group-btn'
 			});
 
-			deleteGroupBtn.onclick = async () => {
+			deleteGroupBtn.onclick = () => {
 				this.plugin.settings.tagGroups.splice(index, 1);
-				await this.plugin.saveSettings();
-				this.display();
+				void this.plugin.saveSettings().then(() => {
+					this.display();
+				});
 			};
 
 			// 显示现有标签
@@ -999,10 +1004,11 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				
 				const deleteBtn = tagEl.createSpan('tgm-tag-delete-btn');
 				deleteBtn.setText('✕');
-				deleteBtn.addEventListener('click', async () => {
+				deleteBtn.addEventListener('click', () => {
 					this.plugin.settings.tagGroups[index].tags.splice(tagIndex, 1);
-					await this.plugin.saveSettings();
-					this.display();
+					void this.plugin.saveSettings().then(() => {
+						this.display();
+					});
 				});
 			});
 
@@ -1042,190 +1048,192 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
             batchFilterContainer.addClass('tgm-display-none');
             
             // 批量筛选添加按钮点击事件
-            batchFilterBtn.addEventListener('click', async () => {
-                const isVisible = !batchFilterContainer.hasClass('tgm-display-none');
-                
-                if (isVisible) {
-                    // 如果筛选界面已显示，则是确认添加操作
-                    batchFilterContainer.addClass('tgm-display-none');
-                    batchFilterContainer.removeClass('tgm-display-block');
-                    batchFilterBtn.removeClass('tgm-btn-active');
-                    batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd') || '批量筛选添加';
-                    this.display(); // 刷新当前标签组
-                } else {
-                    // 关闭标签库（如果打开的话）
-                    const tagLibraryContainer = tagsContainer.querySelector('.tag-library-container') as HTMLElement;
-                    const addFromLibraryBtn = tagsContainer.querySelector('.library-btn') as HTMLElement;
-                    if (tagLibraryContainer && addFromLibraryBtn) {
-                        tagLibraryContainer.addClass('tgm-display-none');
-                        tagLibraryContainer.removeClass('tgm-display-block');
-                        addFromLibraryBtn.removeClass('tgm-btn-active');
-                        addFromLibraryBtn.textContent = i18n.t('settings.addFromLibrary');
-                    }
+            batchFilterBtn.addEventListener('click', () => {
+				void (async () => {
+					const isVisible = !batchFilterContainer.hasClass('tgm-display-none');
+					
+					if (isVisible) {
+						// 如果筛选界面已显示，则是确认添加操作
+						batchFilterContainer.addClass('tgm-display-none');
+						batchFilterContainer.removeClass('tgm-display-block');
+						batchFilterBtn.removeClass('tgm-btn-active');
+						batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd') || '批量筛选添加';
+						this.display(); // 刷新当前标签组
+					} else {
+						// 关闭标签库（如果打开的话）
+						const tagLibraryContainer = tagsContainer.querySelector('.tag-library-container') as HTMLElement;
+						const addFromLibraryBtn = tagsContainer.querySelector('.library-btn') as HTMLElement;
+						if (tagLibraryContainer && addFromLibraryBtn) {
+							tagLibraryContainer.addClass('tgm-display-none');
+							tagLibraryContainer.removeClass('tgm-display-block');
+							addFromLibraryBtn.removeClass('tgm-btn-active');
+							addFromLibraryBtn.textContent = i18n.t('settings.addFromLibrary');
+						}
 
-                    // 显示筛选界面
-                    batchFilterContainer.removeClass('tgm-display-none');
-                    batchFilterContainer.addClass('tgm-display-block');
-                    batchFilterBtn.addClass('tgm-btn-active');
-                    batchFilterBtn.textContent = i18n.t('settings.confirmSelection') || '确认选择';
-                    
-                    // 清空并重新加载筛选界面
-                    batchFilterContainer.empty();
-                    
-                    // 创建筛选输入框
-                    const filterInputContainer = batchFilterContainer.createDiv('filter-input-container');
-                    const filterInput = filterInputContainer.createEl('input', {
-                         type: 'text',
-                         placeholder: i18n.t('settings.filterTagsPlaceholder') || '输入关键词筛选标签'
-                     });
-                    
-                    // 创建全选/取消全选按钮
-                    const selectAllBtn = filterInputContainer.createEl('button', {
-                         text: i18n.t('settings.selectAll') || '全选',
-                         cls: 'select-all-btn'
-                     });
-                    
-                    // 创建标签显示区域
-                    const filteredTagsContainer = batchFilterContainer.createDiv('filtered-tags-container');
-                    
-                    // 获取所有文件的标签
-                    const allTags = new Set<string>();
-                    for (const file of this.app.vault.getMarkdownFiles()) {
-                        const cache = this.app.metadataCache.getFileCache(file);
-                        if (!cache) continue;
-                    
-                        const tags = getAllTags(cache);
-                        if (tags) {
-                            tags.forEach(tag => allTags.add(tag.substring(1))); // 去掉 #
-                        }
-                    }
+						// 显示筛选界面
+						batchFilterContainer.removeClass('tgm-display-none');
+						batchFilterContainer.addClass('tgm-display-block');
+						batchFilterBtn.addClass('tgm-btn-active');
+						batchFilterBtn.textContent = i18n.t('settings.confirmSelection') || '确认选择';
+						
+						// 清空并重新加载筛选界面
+						batchFilterContainer.empty();
+						
+						// 创建筛选输入框
+						const filterInputContainer = batchFilterContainer.createDiv('filter-input-container');
+						const filterInput = filterInputContainer.createEl('input', {
+							 type: 'text',
+							 placeholder: i18n.t('settings.filterTagsPlaceholder') || '输入关键词筛选标签'
+						 });
+						
+						// 创建全选/取消全选按钮
+						const selectAllBtn = filterInputContainer.createEl('button', {
+							 text: i18n.t('settings.selectAll') || '全选',
+							 cls: 'select-all-btn'
+						 });
+						
+						// 创建标签显示区域
+						const filteredTagsContainer = batchFilterContainer.createDiv('filtered-tags-container');
+						
+						// 获取所有文件的标签
+						const allTags = new Set<string>();
+						for (const file of this.app.vault.getMarkdownFiles()) {
+							const cache = this.app.metadataCache.getFileCache(file);
+							if (!cache) continue;
+						
+							const tags = getAllTags(cache);
+							if (tags) {
+								tags.forEach(tag => allTags.add(tag.substring(1))); // 去掉 #
+							}
+						}
 
-                    // 过滤掉所有标签组中已使用的标签
-                    const usedTags = new Set<string>();
-                    this.plugin.settings.tagGroups.forEach(group => {
-                        group.tags.forEach(tag => usedTags.add(tag));
-                    });
-                    const availableTags = Array.from(allTags)
-                        .filter(tag => !usedTags.has(tag))
-                        .sort();
-                    
-                    // 渲染筛选后的标签
-                    const renderFilteredTags = (filterText: string) => {
-                        filteredTagsContainer.empty();
-                        
-                        const filteredTags = filterText.trim() === '' 
-                            ? availableTags 
-                            : availableTags.filter(tag => tag.toLowerCase().includes(filterText.toLowerCase()));
-                        
-                        if (filteredTags.length === 0) {
-                             filteredTagsContainer.createDiv('no-tags-message').setText(i18n.t('settings.noMatchingTags') || '没有匹配的标签');
-                             return;
-                         }
-                        
-                        // 默认全选所有筛选出的标签
-                         const isAllSelected = true;
-                         selectAllBtn.textContent = isAllSelected ? (i18n.t('settings.deselectAll') || '取消全选') : (i18n.t('settings.selectAll') || '全选');
-                        
-                        filteredTags.forEach(tag => {
-                            const tagEl = filteredTagsContainer.createDiv('library-tag-item');
-                            tagEl.setAttribute('data-tag', tag);
+						// 过滤掉所有标签组中已使用的标签
+						const usedTags = new Set<string>();
+						this.plugin.settings.tagGroups.forEach(group => {
+							group.tags.forEach(tag => usedTags.add(tag));
+						});
+						const availableTags = Array.from(allTags)
+							.filter(tag => !usedTags.has(tag))
+							.sort();
+						
+						// 渲染筛选后的标签
+						const renderFilteredTags = (filterText: string) => {
+							filteredTagsContainer.empty();
+							
+							const filteredTags = filterText.trim() === '' 
+								? availableTags 
+								: availableTags.filter(tag => tag.toLowerCase().includes(filterText.toLowerCase()));
+							
+							if (filteredTags.length === 0) {
+								 filteredTagsContainer.createDiv('no-tags-message').setText(i18n.t('settings.noMatchingTags') || '没有匹配的标签');
+								 return;
+							 }
+							
+							// 默认全选所有筛选出的标签
+							 const isAllSelected = true;
+							 selectAllBtn.textContent = isAllSelected ? (i18n.t('settings.deselectAll') || '取消全选') : (i18n.t('settings.selectAll') || '全选');
+							
+							filteredTags.forEach(tag => {
+								const tagEl = filteredTagsContainer.createDiv('library-tag-item');
+								tagEl.setAttribute('data-tag', tag);
 
-                            // 创建标签文本容器
-                            const tagTextEl = tagEl.createSpan('tag-text');
+								// 创建标签文本容器
+								const tagTextEl = tagEl.createSpan('tag-text');
 
-                            // 检查是否为嵌套标签并添加图标
-                            let displayText = tag;
-                            if (tag.includes('/')) {
-                                displayText = `📁 ${tag}`;
-                                tagTextEl.addClass('nested-tag');
-                            }
+								// 检查是否为嵌套标签并添加图标
+								let displayText = tag;
+								if (tag.includes('/')) {
+									displayText = `📁 ${tag}`;
+									tagTextEl.addClass('nested-tag');
+								}
 
-                            tagTextEl.setText(displayText);
+								tagTextEl.setText(displayText);
 
-                            // 使用Obsidian原生的tooltip系统，设置在整个标签项上
-                            tagEl.setAttribute('aria-label', tag);
+								// 使用Obsidian原生的tooltip系统，设置在整个标签项上
+								tagEl.setAttribute('aria-label', tag);
 
-                            // 默认选中所有筛选出的标签
-                            if (isAllSelected) {
-                                tagEl.addClass('selected');
-                            }
+								// 默认选中所有筛选出的标签
+								if (isAllSelected) {
+									tagEl.addClass('selected');
+								}
 
-                            tagEl.addEventListener('click', () => {
-                                tagEl.toggleClass('selected', true);
+								tagEl.addEventListener('click', () => {
+									tagEl.toggleClass('selected', true);
 
-                                // 更新全选按钮状态
-                                const allTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item');
-                                const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
-                                selectAllBtn.textContent = (allTagEls.length === selectedTagEls.length) ? (i18n.t('settings.deselectAll') || '取消全选') : (i18n.t('settings.selectAll') || '全选');
-                            });
-                        });
-                    };
-                    
-                    // 初始渲染所有可用标签
-                    renderFilteredTags('');
-                    
-                    // 添加筛选输入框事件
-                    filterInput.addEventListener('input', () => {
-                        renderFilteredTags(filterInput.value);
-                    });
-                    
-                    // 添加全选/取消全选按钮事件
-                    selectAllBtn.addEventListener('click', () => {
-                        const allTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item');
-                        const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
-                        const shouldSelect = allTagEls.length !== selectedTagEls.length;
-                        
-                        allTagEls.forEach(el => {
-                            if (shouldSelect) {
-                                el.addClass('selected');
-                            } else {
-                                el.removeClass('selected');
-                            }
-                        });
-                        
-                        selectAllBtn.textContent = shouldSelect ? (i18n.t('settings.deselectAll') || '取消全选') : (i18n.t('settings.selectAll') || '全选');
-                    });
-                    
-                    // 移除之前的点击事件处理程序，避免重复添加
-                     const oldClickHandler = batchFilterBtn.onclick;
-                     batchFilterBtn.onclick = async (e) => {
-                         // 阻止事件冒泡，避免触发外层的点击事件
-                         e.stopPropagation();
-                         e.preventDefault();
-                        const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
-                        if (selectedTagEls.length === 0) {
-                             new Notice(i18n.t('settings.selectAtLeastOneTag') || '请至少选择一个标签');
-                             return;
-                         }
-                        
-                        // 添加选中的标签到当前标签组
-                        let addedCount = 0;
-                        for (const tagEl of Array.from(selectedTagEls)) {
-                            const tag = tagEl.getAttribute('data-tag');
-                            if (tag && !this.plugin.settings.tagGroups[index].tags.includes(tag)) {
-                                this.plugin.settings.tagGroups[index].tags.push(tag);
-                                addedCount++;
-                            }
-                        }
-                        
-                        if (addedCount > 0) {
-                            await this.plugin.saveSettings();
-                            const successMessage = i18n.t('settings.tagsAddedSuccess') || `成功添加 {{count}} 个标签到 {{groupName}} 组`;
-                             new Notice(successMessage
-                                 .replace('{{count}}', addedCount.toString())
-                                 .replace('{{groupName}}', this.plugin.settings.tagGroups[index].name));
-                         } else {
-                             new Notice(i18n.t('settings.noNewTagsAdded') || '没有新标签被添加');
-                        }
-                        
-                        // 隐藏筛选界面并重置按钮
-                        batchFilterContainer.addClass('tgm-display-none');
-                        batchFilterContainer.removeClass('tgm-display-block');
-                        batchFilterBtn.removeClass('tgm-btn-active');
-                        batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd') || '批量筛选添加';
-                        this.display(); // 刷新当前标签组
-                    };
-                }
+									// 更新全选按钮状态
+									const allTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item');
+									const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
+									selectAllBtn.textContent = (allTagEls.length === selectedTagEls.length) ? (i18n.t('settings.deselectAll') || '取消全选') : (i18n.t('settings.selectAll') || '全选');
+								});
+							});
+						};
+						
+						// 初始渲染所有可用标签
+						renderFilteredTags('');
+						
+						// 添加筛选输入框事件
+						filterInput.addEventListener('input', () => {
+							renderFilteredTags(filterInput.value);
+						});
+						
+						// 添加全选/取消全选按钮事件
+						selectAllBtn.addEventListener('click', () => {
+							const allTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item');
+							const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
+							const shouldSelect = allTagEls.length !== selectedTagEls.length;
+							
+							allTagEls.forEach(el => {
+								if (shouldSelect) {
+									el.addClass('selected');
+								} else {
+									el.removeClass('selected');
+								}
+							});
+							
+							selectAllBtn.textContent = shouldSelect ? (i18n.t('settings.deselectAll') || '取消全选') : (i18n.t('settings.selectAll') || '全选');
+						});
+						
+												 // 移除之前的点击事件处理程序，避免重复添加
+												 batchFilterBtn.onclick = (e) => {							 void (async () => {
+								 // 阻止事件冒泡，避免触发外层的点击事件
+								 e.stopPropagation();
+								 e.preventDefault();
+								const selectedTagEls = filteredTagsContainer.querySelectorAll('.library-tag-item.selected');
+								if (selectedTagEls.length === 0) {
+									 new Notice(i18n.t('settings.selectAtLeastOneTag') || '请至少选择一个标签');
+									 return;
+								 }
+								
+								// 添加选中的标签到当前标签组
+								let addedCount = 0;
+								for (const tagEl of Array.from(selectedTagEls)) {
+									const tag = tagEl.getAttribute('data-tag');
+									if (tag && !this.plugin.settings.tagGroups[index].tags.includes(tag)) {
+										this.plugin.settings.tagGroups[index].tags.push(tag);
+										addedCount++;
+									}
+								}
+								
+								if (addedCount > 0) {
+									await this.plugin.saveSettings();
+									const successMessage = i18n.t('settings.tagsAddedSuccess') || `成功添加 {{count}} 个标签到 {{groupName}} 组`;
+									 new Notice(successMessage
+										 .replace('{{count}}', addedCount.toString())
+										 .replace('{{groupName}}', this.plugin.settings.tagGroups[index].name));
+								 } else {
+									 new Notice(i18n.t('settings.noNewTagsAdded') || '没有新标签被添加');
+								}
+								
+								// 隐藏筛选界面并重置按钮
+								batchFilterContainer.addClass('tgm-display-none');
+								batchFilterContainer.removeClass('tgm-display-block');
+								batchFilterBtn.removeClass('tgm-btn-active');
+								batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd') || '批量筛选添加';
+								this.display(); // 刷新当前标签组
+							})();
+						};
+					}
+				})();
             });
 
             // 创建标签库浮动区域
@@ -1233,86 +1241,89 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
             tagLibraryContainer.addClass('tgm-display-none');
 
             // 从标签库添加按钮点击事件
-            addFromLibraryBtn.addEventListener('click', async () => {
-                const isVisible = !tagLibraryContainer.hasClass('tgm-display-none');
-                
-                if (isVisible) {
-                    // 如果标签库已显示，则是确认添加操作
-                    tagLibraryContainer.addClass('tgm-display-none');
-                    tagLibraryContainer.removeClass('tgm-display-block');
-                    addFromLibraryBtn.removeClass('tgm-btn-active');
-                    addFromLibraryBtn.textContent = i18n.t('settings.addFromLibrary');
-                    this.display(); // 刷新当前标签组
-                } else {
-                    // 关闭批量筛选（如果打开的话）
-                    const batchFilterContainer = tagsContainer.querySelector('.batch-filter-container') as HTMLElement;
-                    const batchFilterBtn = tagsContainer.querySelector('.batch-filter-btn') as HTMLElement;
-                    if (batchFilterContainer && batchFilterBtn) {
-                        batchFilterContainer.addClass('tgm-display-none');
-                        batchFilterContainer.removeClass('tgm-display-block');
-                        batchFilterBtn.removeClass('tgm-btn-active');
-                        batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd');
-                    }
-
-                    // 显示标签库
-                    tagLibraryContainer.removeClass('tgm-display-none');
-                    tagLibraryContainer.addClass('tgm-display-block');
-                    addFromLibraryBtn.addClass('tgm-btn-active');
-                    addFromLibraryBtn.textContent = i18n.t('settings.confirmSelection');
-                    
-                    // 清空并重新加载标签库
-                    tagLibraryContainer.empty();
-
-                    // 获取所有文件的标签
-                    const allTags = new Set<string>();
-                    for (const file of this.app.vault.getMarkdownFiles()) {
-						const cache = this.app.metadataCache.getFileCache(file);
-						if (!cache) continue;
+            addFromLibraryBtn.addEventListener('click', () => {
+				void (async () => {
+					const isVisible = !tagLibraryContainer.hasClass('tgm-display-none');
 					
-						const tags = getAllTags(cache);
-						if (tags) {
-							tags.forEach(tag => allTags.add(tag.substring(1))); // 去掉 #
+					if (isVisible) {
+						// 如果标签库已显示，则是确认添加操作
+						tagLibraryContainer.addClass('tgm-display-none');
+						tagLibraryContainer.removeClass('tgm-display-block');
+						addFromLibraryBtn.removeClass('tgm-btn-active');
+						addFromLibraryBtn.textContent = i18n.t('settings.addFromLibrary');
+						this.display(); // 刷新当前标签组
+					} else {
+						// 关闭批量筛选（如果打开的话）
+						const batchFilterContainer = tagsContainer.querySelector('.batch-filter-container') as HTMLElement;
+						const batchFilterBtn = tagsContainer.querySelector('.batch-filter-btn') as HTMLElement;
+						if (batchFilterContainer && batchFilterBtn) {
+							batchFilterContainer.addClass('tgm-display-none');
+							batchFilterContainer.removeClass('tgm-display-block');
+							batchFilterBtn.removeClass('tgm-btn-active');
+							batchFilterBtn.textContent = i18n.t('settings.batchFilterAdd');
 						}
+
+						// 显示标签库
+						tagLibraryContainer.removeClass('tgm-display-none');
+						tagLibraryContainer.addClass('tgm-display-block');
+						addFromLibraryBtn.addClass('tgm-btn-active');
+						addFromLibraryBtn.textContent = i18n.t('settings.confirmSelection');
+						
+						// 清空并重新加载标签库
+						tagLibraryContainer.empty();
+
+						// 获取所有文件的标签
+						const allTags = new Set<string>();
+						for (const file of this.app.vault.getMarkdownFiles()) {
+							const cache = this.app.metadataCache.getFileCache(file);
+							if (!cache) continue;
+						
+							const tags = getAllTags(cache);
+							if (tags) {
+								tags.forEach(tag => allTags.add(tag.substring(1))); // 去掉 #
+							}
+						}
+
+						// 过滤掉所有标签组中已使用的标签
+						const usedTags = new Set<string>();
+						this.plugin.settings.tagGroups.forEach(group => {
+							group.tags.forEach(tag => usedTags.add(tag));
+						});
+						const availableTags = Array.from(allTags)
+							.filter(tag => !usedTags.has(tag))
+							.sort();
+
+						// 创建标签选择界面
+						availableTags.forEach(tag => {
+							const tagEl = tagLibraryContainer.createDiv('library-tag-item');
+
+							// 创建标签文本容器
+							const tagTextEl = tagEl.createSpan('tag-text');
+
+							// 检查是否为嵌套标签并添加图标
+							let displayText = tag;
+							if (tag.includes('/')) {
+								displayText = `📁 ${tag}`;
+								tagTextEl.addClass('nested-tag');
+							}
+
+							tagTextEl.setText(displayText);
+
+							// 使用Obsidian原生的tooltip系统，设置在整个标签项上
+							tagEl.setAttribute('aria-label', tag);
+
+							tagEl.addEventListener('click', () => {
+								// 添加标签到组
+								if (!this.plugin.settings.tagGroups[index].tags.includes(tag)) {
+									this.plugin.settings.tagGroups[index].tags.push(tag);
+									void this.plugin.saveSettings().then(() => {
+										tagEl.addClass('selected');
+									});
+								}
+							});
+						});
 					}
-
-                    // 过滤掉所有标签组中已使用的标签
-                    const usedTags = new Set<string>();
-                    this.plugin.settings.tagGroups.forEach(group => {
-                        group.tags.forEach(tag => usedTags.add(tag));
-                    });
-                    const availableTags = Array.from(allTags)
-                        .filter(tag => !usedTags.has(tag))
-                        .sort();
-
-                    // 创建标签选择界面
-                    availableTags.forEach(tag => {
-                        const tagEl = tagLibraryContainer.createDiv('library-tag-item');
-
-                        // 创建标签文本容器
-                        const tagTextEl = tagEl.createSpan('tag-text');
-
-                        // 检查是否为嵌套标签并添加图标
-                        let displayText = tag;
-                        if (tag.includes('/')) {
-                            displayText = `📁 ${tag}`;
-                            tagTextEl.addClass('nested-tag');
-                        }
-
-                        tagTextEl.setText(displayText);
-
-                        // 使用Obsidian原生的tooltip系统，设置在整个标签项上
-                        tagEl.setAttribute('aria-label', tag);
-
-                        tagEl.addEventListener('click', async () => {
-                            // 添加标签到组
-                            if (!this.plugin.settings.tagGroups[index].tags.includes(tag)) {
-                                this.plugin.settings.tagGroups[index].tags.push(tag);
-                                await this.plugin.saveSettings();
-                                tagEl.addClass('selected');
-                            }
-                        });
-                    });
-                }
+				})();
             });
 			
 			// 验证标签是否符合语法规则的函数
@@ -1321,7 +1332,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				return !!tag && tag.length > 0 && !/^\.|[\s\[\](){}<>#:;,\'"?=+`~!@$%^&*]/.test(tag);
 			};
 
-			addTagBtn.addEventListener('click', async () => {
+			addTagBtn.addEventListener('click', () => {
 				const tagValue = addTagInput.value.trim();
 				
 				// 验证标签是否符合语法规则
@@ -1332,9 +1343,10 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				
 				if (tagValue && !this.plugin.settings.tagGroups[index].tags.includes(tagValue)) {
 					this.plugin.settings.tagGroups[index].tags.push(tagValue);
-					await this.plugin.saveSettings();
-					addTagInput.value = '';
-					this.display();
+					void this.plugin.saveSettings().then(() => {
+						addTagInput.value = '';
+						this.display();
+					});
 				}
 			});
 			
@@ -1359,7 +1371,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		new Setting(colorMappingSection).setName(i18n.t('settings.tagColorMappings')).setHeading();
 
 		// 添加说明文字
-		const descEl = colorMappingSection.createEl('p', {
+		colorMappingSection.createEl('p', {
 			text: i18n.t('settings.colorMappingDesc'),
 			cls: 'setting-item-description'
 		});
@@ -1370,15 +1382,16 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			.setDesc(i18n.t('settings.addColorMappingDesc'))
 			.addButton(cb => cb
 				.setButtonText(i18n.t('settings.addColorMapping'))
-				.onClick(async () => {
+				.onClick(() => {
 					this.plugin.settings.tagColorMappings.push({
 						pattern: '',
 						color: '#3b82f6',
 						isRegex: false,
 						enabled: true
 					});
-					await this.plugin.saveSettings();
-					this.display();
+					void this.plugin.saveSettings().then(() => {
+						this.display();
+					});
 				}));
 
 		// 显示现有颜色映射
@@ -1392,23 +1405,23 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				.addToggle(toggle => toggle
 					.setValue(mapping.enabled)
 					.setTooltip(i18n.t('settings.enabled'))
-					.onChange(async (value) => {
+					.onChange((value) => {
 						this.plugin.settings.tagColorMappings[index].enabled = value;
-						await this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					}))
 				.addText(text => text
 					.setPlaceholder(i18n.t('settings.patternPlaceholder'))
 					.setValue(mapping.pattern)
-					.onChange(async (value) => {
+					.onChange((value) => {
 						this.plugin.settings.tagColorMappings[index].pattern = value;
-						await this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					}))
 				.addToggle(toggle => toggle
 					.setValue(mapping.isRegex)
 					.setTooltip(i18n.t('settings.useRegex'))
-					.onChange(async (value) => {
+					.onChange((value) => {
 						this.plugin.settings.tagColorMappings[index].isRegex = value;
-						await this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					}));
 
 			// 添加预设颜色选择器
@@ -1417,10 +1430,11 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			setting.addButton(cb => cb
 				.setButtonText(i18n.t('settings.delete'))
 				.setWarning()
-				.onClick(async () => {
+				.onClick(() => {
 					this.plugin.settings.tagColorMappings.splice(index, 1);
-					await this.plugin.saveSettings();
-					this.display();
+					void this.plugin.saveSettings().then(() => {
+						this.display();
+					});
 				}));
 		});
 	}
@@ -1441,7 +1455,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		// 添加预设颜色下拉选择器
 		setting.addDropdown(dropdown => {
 			dropdown.addOption('', i18n.t('settings.customColor') || '自定义颜色');
-			presetColors.forEach((color, colorIndex) => {
+			presetColors.forEach((color) => {
 				dropdown.addOption(color.value, color.name);
 			});
 
@@ -1449,7 +1463,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			const currentPreset = presetColors.find(color => color.value === mapping.color);
 			dropdown.setValue(currentPreset ? currentPreset.value : '');
 
-			dropdown.onChange(async (value) => {
+			dropdown.onChange((value) => {
 				if (value) {
 					// 选择了预设颜色
 					this.plugin.settings.tagColorMappings[index].color = value;
@@ -1457,8 +1471,9 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					// 选择了自定义颜色，使用默认颜色
 					this.plugin.settings.tagColorMappings[index].color = '#3b82f6';
 				}
-				await this.plugin.saveSettings();
-				this.display(); // 重新渲染以更新颜色选择器
+				void this.plugin.saveSettings().then(() => {
+					this.display(); // 重新渲染以更新颜色选择器
+				});
 			});
 		});
 
@@ -1467,9 +1482,9 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		if (isCustomColor) {
 			setting.addColorPicker(color => color
 				.setValue(mapping.color)
-				.onChange(async (value) => {
+				.onChange((value) => {
 					this.plugin.settings.tagColorMappings[index].color = value;
-					await this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}));
 		}
 	}
@@ -1498,12 +1513,12 @@ class TagGroupView extends ItemView {
     async onOpen() {
         const container = this.containerEl.children[1];
         container.empty();
-        await this.renderTagGroups();
+        this.renderTagGroups();
     }
 
 
 
-    async renderTagGroups() {
+    renderTagGroups() {
         const container = this.containerEl.children[1];
         container.empty();
 
@@ -1760,7 +1775,7 @@ class TagGroupView extends ItemView {
                     Sortable.create(tagsContainer, {
                         group: 'tags',
                         animation: 150,
-                        onEnd: async (evt: Sortable.SortableEvent) => {
+                        onEnd: (evt: Sortable.SortableEvent) => {
                             const tag = evt.item.getAttribute('data-tag');
                             const fromGroupItem = evt.from.closest('.tag-group-item');
                             const toGroupItem = evt.to.closest('.tag-group-item');
@@ -1788,7 +1803,7 @@ class TagGroupView extends ItemView {
                                 this.plugin.settings.tagGroups[fromGroupIndex].tags = newTags;
                             }
 
-                            await this.plugin.saveSettings();
+                            void this.plugin.saveSettings();
                         }
                     })
                 );
@@ -1800,7 +1815,7 @@ class TagGroupView extends ItemView {
             this.groupSortable = Sortable.create(groupContainer, {
                 animation: 150,
                 handle: '.tag-group-handle',
-                onEnd: async () => {
+                onEnd: () => {
                     // 更新组的顺序
                     const newGroups: TagGroup[] = [];
                     groupContainer.querySelectorAll('.tag-group-item').forEach((el) => {
@@ -1808,7 +1823,7 @@ class TagGroupView extends ItemView {
                         newGroups.push(this.plugin.settings.tagGroups[index]);
                     });
                     this.plugin.settings.tagGroups = newGroups;
-                    await this.plugin.saveSettings();
+                    void this.plugin.saveSettings();
                 }
             });
         }
