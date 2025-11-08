@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-floating-promises */
 import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, moment, TFile } from 'obsidian';
 import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
@@ -325,7 +326,7 @@ class TagSelectorModal {
 		this.setupDrag();
 		
 		// 异步设置搜索框监听器
-		(async () => {
+		void (async () => {
 			try {
 				await this.setupSearchBoxListener();
 			} catch (e) {
@@ -864,6 +865,17 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	private async saveSettingsAndRefreshDisplay() {
+		try {
+			await this.plugin.saveSettings();
+			this.display();
+		} catch (error) {
+			console.error("Failed to save settings and refresh display:", error);
+			new Notice("Failed to save settings.");
+		}
+	}
+
+
 	display(): void {
 		const { containerEl } = this;
 
@@ -915,9 +927,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.enableCustomColors)
 				.onChange((value) => {
 					this.plugin.settings.enableCustomColors = value;
-					void this.plugin.saveSettings().then(() => {
-						this.display(); // 重新渲染设置页面
-					});
+					void this.saveSettingsAndRefreshDisplay();
 				})
 			);
 
@@ -943,9 +953,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 						name: i18n.t('settings.groupName'),
 						tags: []
 					});
-					void this.plugin.saveSettings().then(() => {
-						this.display();
-					});
+					void this.saveSettingsAndRefreshDisplay();
 				}));
 
 		// 显示现有标签组
@@ -968,7 +976,10 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 			groupNameInput.addEventListener('change', () => {
 				this.plugin.settings.tagGroups[index].name = groupNameInput.value;
-				void this.plugin.saveSettings();
+				void this.plugin.saveSettings().catch(err => {
+					console.error("Failed to save settings:", err);
+					new Notice("Failed to save settings.");
+				});
 			});
 
 			const deleteGroupBtn = groupHeaderContainer.createEl('button', {
@@ -978,9 +989,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 			deleteGroupBtn.onclick = () => {
 				this.plugin.settings.tagGroups.splice(index, 1);
-				void this.plugin.saveSettings().then(() => {
-					this.display();
-				});
+				void this.saveSettingsAndRefreshDisplay();
 			};
 
 			// 显示现有标签
@@ -1006,9 +1015,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				deleteBtn.setText('✕');
 				deleteBtn.addEventListener('click', () => {
 					this.plugin.settings.tagGroups[index].tags.splice(tagIndex, 1);
-					void this.plugin.saveSettings().then(() => {
-						this.display();
-					});
+					void this.saveSettingsAndRefreshDisplay();
 				});
 			});
 
@@ -1049,7 +1056,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
             
             // 批量筛选添加按钮点击事件
             batchFilterBtn.addEventListener('click', () => {
-				void (async () => {
+				void (() => {
 					const isVisible = !batchFilterContainer.hasClass('tgm-display-none');
 					
 					if (isVisible) {
@@ -1242,7 +1249,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
             // 从标签库添加按钮点击事件
             addFromLibraryBtn.addEventListener('click', () => {
-				void (async () => {
+				void (() => {
 					const isVisible = !tagLibraryContainer.hasClass('tgm-display-none');
 					
 					if (isVisible) {
@@ -1316,9 +1323,15 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 								// 添加标签到组
 								if (!this.plugin.settings.tagGroups[index].tags.includes(tag)) {
 									this.plugin.settings.tagGroups[index].tags.push(tag);
-									void this.plugin.saveSettings().then(() => {
-										tagEl.addClass('selected');
-									});
+									void (async () => {
+										try {
+											await this.plugin.saveSettings();
+											tagEl.addClass('selected');
+										} catch (err) {
+											console.error("Failed to save settings:", err);
+											new Notice("Failed to save settings.");
+										}
+									})();
 								}
 							});
 						});
@@ -1329,7 +1342,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			// 验证标签是否符合语法规则的函数
 			const isValidTag = (tag: string): boolean => {
 				// 检查标签是否以.开头或包含其他不符合语法的字符
-				return !!tag && tag.length > 0 && !/^\.|[\s\[\](){}<>#:;,\'"?=+`~!@$%^&*]/.test(tag);
+				return !!tag && tag.length > 0 && !/^\.|[\s\](){}<>#:;,"?=+`~!@$%^&*]/.test(tag);
 			};
 
 			addTagBtn.addEventListener('click', () => {
@@ -1343,10 +1356,8 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				
 				if (tagValue && !this.plugin.settings.tagGroups[index].tags.includes(tagValue)) {
 					this.plugin.settings.tagGroups[index].tags.push(tagValue);
-					void this.plugin.saveSettings().then(() => {
-						addTagInput.value = '';
-						this.display();
-					});
+					addTagInput.value = '';
+					void this.saveSettingsAndRefreshDisplay();
 				}
 			});
 			
@@ -1389,9 +1400,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 						isRegex: false,
 						enabled: true
 					});
-					void this.plugin.saveSettings().then(() => {
-						this.display();
-					});
+					void this.saveSettingsAndRefreshDisplay();
 				}));
 
 		// 显示现有颜色映射
@@ -1407,21 +1416,30 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					.setTooltip(i18n.t('settings.enabled'))
 					.onChange((value) => {
 						this.plugin.settings.tagColorMappings[index].enabled = value;
-						void this.plugin.saveSettings();
+						void this.plugin.saveSettings().catch(err => {
+							console.error("Failed to save settings:", err);
+							new Notice("Failed to save settings.");
+						});
 					}))
 				.addText(text => text
 					.setPlaceholder(i18n.t('settings.patternPlaceholder'))
 					.setValue(mapping.pattern)
 					.onChange((value) => {
 						this.plugin.settings.tagColorMappings[index].pattern = value;
-						void this.plugin.saveSettings();
+						void this.plugin.saveSettings().catch(err => {
+							console.error("Failed to save settings:", err);
+							new Notice("Failed to save settings.");
+						});
 					}))
 				.addToggle(toggle => toggle
 					.setValue(mapping.isRegex)
 					.setTooltip(i18n.t('settings.useRegex'))
 					.onChange((value) => {
 						this.plugin.settings.tagColorMappings[index].isRegex = value;
-						void this.plugin.saveSettings();
+						void this.plugin.saveSettings().catch(err => {
+							console.error("Failed to save settings:", err);
+							new Notice("Failed to save settings.");
+						});
 					}));
 
 			// 添加预设颜色选择器
@@ -1432,9 +1450,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				.setWarning()
 				.onClick(() => {
 					this.plugin.settings.tagColorMappings.splice(index, 1);
-					void this.plugin.saveSettings().then(() => {
-						this.display();
-					});
+					void this.saveSettingsAndRefreshDisplay();
 				}));
 		});
 	}
@@ -1471,9 +1487,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					// 选择了自定义颜色，使用默认颜色
 					this.plugin.settings.tagColorMappings[index].color = '#3b82f6';
 				}
-				void this.plugin.saveSettings().then(() => {
-					this.display(); // 重新渲染以更新颜色选择器
-				});
+				void this.saveSettingsAndRefreshDisplay();
 			});
 		});
 
@@ -1484,7 +1498,10 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				.setValue(mapping.color)
 				.onChange((value) => {
 					this.plugin.settings.tagColorMappings[index].color = value;
-					void this.plugin.saveSettings();
+					void this.plugin.saveSettings().catch(err => {
+						console.error("Failed to save settings:", err);
+						new Notice("Failed to save settings.");
+					});
 				}));
 		}
 	}
@@ -1510,6 +1527,7 @@ class TagGroupView extends ItemView {
         return i18n.t('overview.title');
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async onOpen() {
         const container = this.containerEl.children[1];
         container.empty();
@@ -1803,7 +1821,10 @@ class TagGroupView extends ItemView {
                                 this.plugin.settings.tagGroups[fromGroupIndex].tags = newTags;
                             }
 
-                            void this.plugin.saveSettings();
+                            void this.plugin.saveSettings().catch(err => {
+                                console.error("Failed to save settings:", err);
+                                new Notice("Failed to save settings.");
+                            });
                         }
                     })
                 );
@@ -1823,12 +1844,16 @@ class TagGroupView extends ItemView {
                         newGroups.push(this.plugin.settings.tagGroups[index]);
                     });
                     this.plugin.settings.tagGroups = newGroups;
-                    void this.plugin.saveSettings();
+                    void this.plugin.saveSettings().catch(err => {
+                        console.error("Failed to save settings:", err);
+                        new Notice("Failed to save settings.");
+                    });
                 }
             });
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async onClose() {
         // 清理Sortable实例
         if (this.groupSortable) {
