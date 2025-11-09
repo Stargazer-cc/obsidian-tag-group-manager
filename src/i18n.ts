@@ -98,14 +98,12 @@ export class I18n {
 
   public t(key: string): string {
     const keys = key.split('.');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let current: any = this.getTranslations();
 
     for (const k of keys) {
       if (current && typeof current === 'object' && k in current) {
-        current = current[k];
+        current = (current as any)[k];
       } else {
-        // console.warn(`Translation key not found: ${key}`);
         return key;
       }
     }
