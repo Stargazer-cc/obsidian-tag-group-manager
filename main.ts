@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, moment, TFile } from 'obsidian';
 import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
@@ -1527,13 +1526,11 @@ class TagGroupView extends ItemView {
         return i18n.t('overview.title');
     }
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     async onOpen() {
         const container = this.containerEl.children[1];
         container.empty();
         this.renderTagGroups();
     }
-
 
 
     renderTagGroups() {
@@ -1853,7 +1850,6 @@ class TagGroupView extends ItemView {
         }
     }
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     async onClose() {
         // 清理Sortable实例
         if (this.groupSortable) {
