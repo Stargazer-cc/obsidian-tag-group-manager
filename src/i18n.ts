@@ -98,11 +98,11 @@ export class I18n {
 
   public t(key: string): string {
     const keys = key.split('.');
-    let current: any = this.getTranslations();
+    let current: unknown = this.getTranslations();
 
     for (const k of keys) {
-      if (current && typeof current === 'object' && k in current) {
-        current = (current as any)[k];
+      if (current && typeof current === 'object' && k in (current as Record<string, unknown>)) {
+        current = (current as Record<string, unknown>)[k];
       } else {
         return key;
       }
