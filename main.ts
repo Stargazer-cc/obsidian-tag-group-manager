@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, moment, TFile } from 'obsidian';
+import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, moment, TFile, Modal, TextComponent, ColorComponent } from 'obsidian';
 import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
 import { getAllTags } from "obsidian";
@@ -48,19 +48,30 @@ interface TagColorMapping {
 interface TagGroupManagerSettings {
 	tagGroups: TagGroup[];
 	showStarButton: boolean;
-	tagColorMappings: TagColorMapping[]; // 新增：标签颜色映射表
-	enableCustomColors: boolean;         // 新增：是否启用自定义颜色功能
+	tagColorMappings: TagColorMapping[]; // 标签颜色映射表 (用于正则/批量)
+	enableCustomColors: boolean;         // 是否启用自定义颜色功能
+	customColors: string[];              // 新增：7个自定义颜色槽
+	tagColors: Record<string, string>;   // 新增：单个标签颜色设置
 }
 
 const DEFAULT_SETTINGS: TagGroupManagerSettings = {
 	tagGroups: [],
 	showStarButton: true,
 	tagColorMappings: [],
-	enableCustomColors: false
+	enableCustomColors: false,
+	customColors: ['', '', '', '', '', '', ''],
+	tagColors: {}
 };
 
 // 工具函数：根据标签名获取对应的颜色
-function getTagColor(tagName: string, colorMappings: TagColorMapping[]): string | null {
+function getTagColor(tagName: string, settings: TagGroupManagerSettings): string | null {
+	// 1. 优先检查单个标签的颜色设置
+	if (settings.tagColors && settings.tagColors[tagName]) {
+		return settings.tagColors[tagName];
+	}
+
+	// 2. 检查正则/批量映射
+	const colorMappings = settings.tagColorMappings;
 	if (!colorMappings || colorMappings.length === 0) {
 		return null;
 	}
@@ -627,7 +638,7 @@ class TagSelectorModal {
 
 			// 应用自定义颜色（如果启用且有匹配的颜色映射）
 			if (this.plugin && this.plugin.settings.enableCustomColors) {
-				const customColor = getTagColor(tag, this.plugin.settings.tagColorMappings);
+				const customColor = getTagColor(tag, this.plugin.settings);
 				if (customColor) {
 					// 检查是否是预设的彩虹颜色
 					const isRainbowColor = customColor.startsWith('var(--color-');
@@ -643,12 +654,43 @@ class TagSelectorModal {
 						if (colorClass) {
 							tagEl.addClass(colorClass);
 						} else {
-							// 对于自定义颜色，使用数据属性
-							tagEl.setAttribute('data-custom-color', customColor);
+							// 对于自定义颜色，使用类似彩虹目录的渐变效果
+							// 将十六进制颜色转换为 RGB
+							const hexToRgb = (hex: string) => {
+								const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+								return result ? {
+									r: parseInt(result[1], 16),
+									g: parseInt(result[2], 16),
+									b: parseInt(result[3], 16)
+								} : null;
+							};
+
+							const rgb = hexToRgb(customColor);
+							if (rgb) {
+								const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)`;
+								const textColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.85)`;
+								const borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+
+								tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.06))`, 'important');
+								tagEl.style.setProperty('color', textColor, 'important');
+								tagEl.style.setProperty('border-color', borderColor, 'important');
+							}
 						}
 
 						tagEl.addClass('custom-colored-tag');
 					}
+				} else {
+					// 开启颜色映射但未设置特定颜色时，使用默认的彩虹风格渐变
+					// 使用中性的灰蓝色作为默认颜色
+					const defaultRgb = { r: 148, g: 163, b: 184 }; // lighter slate
+					const bgColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.08)`;
+					const textColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.85)`;
+					const borderColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.15)`;
+
+					tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.06))`, 'important');
+					tagEl.style.setProperty('color', textColor, 'important');
+					tagEl.style.setProperty('border-color', borderColor, 'important');
+					tagEl.addClass('tgm-default-rainbow-tag');
 				}
 			}
 
@@ -855,6 +897,181 @@ class TagSelectorModal {
 	}
 }
 
+// 颜色选择器模态框
+class ColorPickerModal extends Modal {
+	plugin: TagGroupManagerPlugin;
+	initialColor: string;
+	onSave: (color: string) => void;
+	currentPickerColor: string;
+
+	constructor(app: App, plugin: TagGroupManagerPlugin, initialColor: string, onSave: (color: string) => void) {
+		super(app);
+		this.plugin = plugin;
+		this.initialColor = initialColor;
+		this.onSave = onSave;
+		this.currentPickerColor = initialColor.startsWith('#') ? initialColor : '#000000';
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.addClass('tgm-color-picker-modal');
+
+		contentEl.createEl('h2', { text: i18n.t('settings.selectColor') || '选择颜色' });
+
+		// 1. 预设颜色
+		contentEl.createEl('h3', { text: i18n.t('settings.presetColors') || '预设颜色' });
+		const presetsContainer = contentEl.createDiv('tgm-color-presets');
+
+		const presetColors = [
+			{ name: i18n.t('settings.presetRed') || '红色', value: 'var(--color-red)', bg: '#e74c3c' },
+			{ name: i18n.t('settings.presetBlue') || '蓝色', value: 'var(--color-blue)', bg: '#3498db' },
+			{ name: i18n.t('settings.presetGreen') || '绿色', value: 'var(--color-green)', bg: '#2ecc71' },
+			{ name: i18n.t('settings.presetOrange') || '橙色', value: 'var(--color-orange)', bg: '#f39c12' },
+			{ name: i18n.t('settings.presetPurple') || '紫色', value: 'var(--color-purple)', bg: '#9b59b6' },
+			{ name: i18n.t('settings.presetCyan') || '青色', value: 'var(--color-cyan)', bg: '#1abc9c' },
+			{ name: i18n.t('settings.presetPink') || '粉色', value: 'var(--color-pink)', bg: '#e91e63' }
+		];
+
+		presetColors.forEach(preset => {
+			const btn = presetsContainer.createDiv('tgm-color-preset-btn');
+			btn.style.backgroundColor = preset.bg;
+			btn.setAttribute('aria-label', preset.name);
+			if (this.initialColor === preset.value) btn.addClass('selected');
+
+			btn.addEventListener('click', () => {
+				this.onSave(preset.value);
+				this.close();
+			});
+		});
+
+		// 2. 自定义颜色
+		contentEl.createEl('h3', { text: i18n.t('settings.customColors') || '自定义颜色' });
+
+		const customContainer = contentEl.createDiv('tgm-custom-color-container');
+
+		// 颜色选择器
+		const pickerContainer = customContainer.createDiv('tgm-color-picker-control');
+		const colorPicker = new ColorComponent(pickerContainer)
+			.setValue(this.currentPickerColor)
+			.onChange((value) => {
+				this.currentPickerColor = value;
+			});
+
+		const useColorBtn = pickerContainer.createEl('button', { text: i18n.t('settings.useColor') || '使用此颜色' });
+		useColorBtn.addClass('mod-cta');
+
+		// 添加恢复默认按钮
+		const resetBtn = pickerContainer.createEl('button', { text: i18n.t('settings.resetColor') || '恢复默认' });
+		resetBtn.addClass('tgm-reset-color-btn');
+
+		// 槽位
+		const slotsContainer = customContainer.createDiv('tgm-color-slots');
+
+		const renderSlots = () => {
+			slotsContainer.empty();
+			this.plugin.settings.customColors.forEach((color, index) => {
+				const slot = slotsContainer.createDiv('tgm-color-slot');
+				if (color) {
+					slot.style.backgroundColor = color;
+					if (this.initialColor === color) slot.addClass('selected');
+					slot.setAttribute('aria-label', `${i18n.t('settings.useColor') || '使用此颜色'} (Right click to clear)`);
+
+					slot.addEventListener('click', () => {
+						this.onSave(color);
+						this.close();
+					});
+
+					// 右键删除
+					slot.addEventListener('contextmenu', (e) => {
+						e.preventDefault();
+						this.plugin.settings.customColors[index] = '';
+						void this.plugin.saveSettings();
+						renderSlots();
+					});
+				} else {
+					slot.addClass('empty');
+					slot.setText('+');
+					slot.setAttribute('aria-label', i18n.t('settings.saveToSlot') || '保存到此位置');
+					slot.addEventListener('click', () => {
+						// 保存当前选择器颜色到此槽位
+						this.plugin.settings.customColors[index] = this.currentPickerColor;
+						void this.plugin.saveSettings();
+						renderSlots();
+					});
+				}
+			});
+		};
+
+		renderSlots();
+
+		useColorBtn.addEventListener('click', () => {
+			// 自动保存到槽位逻辑
+			const currentColor = this.currentPickerColor;
+
+			// 检查颜色是否已经存在于槽位中
+			const existingIndex = this.plugin.settings.customColors.indexOf(currentColor);
+
+			if (existingIndex === -1) {
+				// 寻找第一个空槽位
+				let targetIndex = this.plugin.settings.customColors.findIndex(c => !c);
+
+				if (targetIndex === -1) {
+					// 如果满了，使用循环覆盖逻辑（这里需要一个持久化的索引，或者简单地从左到右循环）
+					// 为了简单起见，我们使用一个简单的移动逻辑：
+					// 实际上用户希望"从左往右填补，当满了七个以后再点击将继续从左往右覆盖"
+					// 这意味着我们需要记录上一次写入的位置，或者每次都移动数组？
+					// 让我们使用一个简单的策略：如果满了，就覆盖第一个，然后下次覆盖第二个...
+					// 但由于没有持久化存储"当前覆盖位置"，我们无法跨会话记住。
+					// 替代方案：将新颜色推入数组末尾，移除第一个（队列模式），但这会改变所有颜色的位置。
+					// 用户指的"从左往右覆盖"通常意味着有一个指针。
+					// 让我们尝试在 settings 中添加一个 `customColorNextIndex` 字段来追踪。
+					// 如果不想修改 settings 结构，我们可以尝试基于时间戳？不行。
+					// 让我们简单地：如果满了，就覆盖第0个，然后第1个... 
+					// 为了实现这一点，我们需要在 settings 中添加一个字段。
+					// 既然不能轻易修改接口定义（需要查看 types），我们先用"队列"模式（移除第一个，添加到末尾）？
+					// 不，用户说"从左往右覆盖"，这通常意味着位置是固定的。
+					// 让我们假设用户希望的是：找到第一个空位。如果没有空位，就覆盖第0个？
+					// 或者我们可以简单地实现：总是寻找第一个空位。如果都满了，就覆盖第0个。
+					// 这是一个合理的默认行为。
+					// 更有趣的是，如果我们在 settings 中添加一个隐藏的 index...
+					// 让我们先检查 settings 定义。
+
+					// 暂时实现：如果满了，覆盖第一个（索引0）。
+					// 更好的体验可能是：将所有颜色左移，新颜色加在最后？
+					// 用户说："从左往右填补，当满了七个以后再点击将继续从左往右覆盖"
+					// 这听起来像是一个循环指针。
+					// 我们可以利用 localStorage 来存储这个临时状态，或者就在 settings 里加一个属性（如果允许动态添加）。
+					// 让我们尝试在 plugin.settings 上直接添加一个运行时属性（不保存到磁盘也行，或者保存）。
+
+					// 检查 plugin.settings 类型
+					// 假设我们无法修改类型定义，我们可以使用 (this.plugin.settings as any).customColorIndex
+
+					let nextIndex = (this.plugin.settings as any).customColorIndex || 0;
+					targetIndex = nextIndex;
+					(this.plugin.settings as any).customColorIndex = (nextIndex + 1) % 7;
+				}
+
+				this.plugin.settings.customColors[targetIndex] = currentColor;
+				void this.plugin.saveSettings();
+			}
+
+			this.onSave(currentColor);
+			this.close();
+		});
+
+		resetBtn.addEventListener('click', () => {
+			this.onSave(''); // 保存空字符串表示移除自定义颜色
+			this.close();
+		});
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
 // 设置选项卡
 class TagGroupManagerSettingTab extends PluginSettingTab {
 	plugin: TagGroupManagerPlugin;
@@ -932,6 +1149,11 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		// 如果启用了自定义颜色，显示颜色配置界面
 		if (this.plugin.settings.enableCustomColors) {
+			// 添加单个标签颜色设置提示
+			new Setting(colorSection)
+				.setName(i18n.t('settings.singleTagColorSetting'))
+				.setDesc(i18n.t('settings.singleTagColorSettingDesc'));
+
 			this.renderColorMappingSettings(colorSection);
 		}
 	}
@@ -996,6 +1218,57 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			group.tags.forEach((tag, tagIndex) => {
 				const tagEl = tagsList.createDiv('tgm-tag-item');
 
+				// 应用颜色（如果启用且有颜色设置）
+				if (this.plugin.settings.enableCustomColors) {
+					const customColor = getTagColor(tag, this.plugin.settings);
+					if (customColor) {
+						const isRainbowColor = customColor.startsWith('var(--color-');
+						if (isRainbowColor) {
+							tagEl.addClass('tag-group-manager-rainbow-tag');
+							tagEl.setAttribute('data-color', customColor);
+						} else {
+							tagEl.addClass('tgm-custom-color-tag');
+							const colorClass = getColorClass(customColor);
+							if (colorClass) {
+								tagEl.addClass(colorClass);
+							} else {
+								// 对于自定义颜色，使用类似彩虹目录的渐变效果
+								const hexToRgb = (hex: string) => {
+									const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+									return result ? {
+										r: parseInt(result[1], 16),
+										g: parseInt(result[2], 16),
+										b: parseInt(result[3], 16)
+									} : null;
+								};
+
+								const rgb = hexToRgb(customColor);
+								if (rgb) {
+									const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)`;
+									const textColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.85)`;
+									const borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+
+									tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.06))`, 'important');
+									tagEl.style.setProperty('color', textColor, 'important');
+									tagEl.style.setProperty('border-color', borderColor, 'important');
+								}
+							}
+							tagEl.addClass('custom-colored-tag');
+						}
+					} else {
+						// 开启颜色映射但未设置特定颜色时，使用默认的彩虹风格渐变
+						const defaultRgb = { r: 148, g: 163, b: 184 };
+						const bgColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.08)`;
+						const textColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.85)`;
+						const borderColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.15)`;
+
+						tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.06))`, 'important');
+						tagEl.style.setProperty('color', textColor, 'important');
+						tagEl.style.setProperty('border-color', borderColor, 'important');
+						tagEl.addClass('tgm-default-rainbow-tag');
+					}
+				}
+
 				const tagText = tagEl.createSpan('tgm-tag-text');
 
 				// 检查是否为嵌套标签并添加图标
@@ -1010,10 +1283,40 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				// 使用Obsidian原生的tooltip系统，设置在整个标签项上
 				tagEl.setAttribute('aria-label', `#${tag}`);
 
+				// 添加点击事件打开颜色选择器
+				if (this.plugin.settings.enableCustomColors) {
+					tagEl.addClass('tgm-tag-clickable');
+					tagEl.addEventListener('click', (e) => {
+						// 如果点击的是删除按钮，不打开颜色选择器
+						if ((e.target as HTMLElement).hasClass('tgm-tag-delete-btn')) {
+							return;
+						}
+
+						// 确保customColors已初始化
+						if (!this.plugin.settings.customColors || !Array.isArray(this.plugin.settings.customColors) || this.plugin.settings.customColors.length !== 7) {
+							this.plugin.settings.customColors = ['', '', '', '', '', '', ''];
+						}
+
+						const currentColor = this.plugin.settings.tagColors[tag] || '';
+						new ColorPickerModal(this.app, this.plugin, currentColor, (color) => {
+							// 保存颜色
+							this.plugin.settings.tagColors[tag] = color;
+							void this.plugin.saveSettings();
+							// 刷新显示
+							this.display();
+						}).open();
+					});
+				}
+
 				const deleteBtn = tagEl.createSpan('tgm-tag-delete-btn');
 				deleteBtn.setText('✕');
-				deleteBtn.addEventListener('click', () => {
+				deleteBtn.addEventListener('click', (e) => {
+					e.stopPropagation(); // 阻止冒泡到标签点击事件
 					this.plugin.settings.tagGroups[index].tags.splice(tagIndex, 1);
+					// 同时删除该标签的颜色设置
+					if (this.plugin.settings.tagColors[tag]) {
+						delete this.plugin.settings.tagColors[tag];
+					}
 					void this.saveSettingsAndRefreshDisplay();
 				});
 			});
@@ -1377,83 +1680,186 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 	// 渲染颜色映射设置界面
 	renderColorMappingSettings(containerEl: HTMLElement): void {
-		// 创建颜色映射子区域
-		const colorMappingSection = containerEl.createDiv('color-mapping-subsection');
-		new Setting(colorMappingSection).setName(i18n.t('settings.tagColorMappings')).setHeading();
+		// 创建批量颜色操作区域
+		const batchSection = containerEl.createDiv('color-mapping-subsection');
+		new Setting(batchSection)
+			.setName(i18n.t('settings.batchColorOperation'))
+			.setDesc(i18n.t('settings.batchColorOperationDesc'))
+			.setHeading();
 
-		// 添加说明文字
-		colorMappingSection.createEl('p', {
-			text: i18n.t('settings.colorMappingDesc'),
-			cls: 'setting-item-description'
+		// 创建紧凑的单行操作区域
+		const batchContainer = batchSection.createDiv('tgm-batch-color-container');
+
+		// 存储当前选中的颜色
+		let selectedColor = '';
+
+		// 正则表达式输入框
+		const patternInput = batchContainer.createEl('input', {
+			type: 'text',
+			placeholder: i18n.t('settings.regexPatternPlaceholder'),
+			cls: 'tgm-batch-pattern-input'
 		});
 
-		// 添加新颜色映射按钮
-		new Setting(colorMappingSection)
-			.setName(i18n.t('settings.addColorMapping'))
-			.setDesc(i18n.t('settings.addColorMappingDesc'))
-			.addButton(cb => cb
-				.setButtonText(i18n.t('settings.addColorMapping'))
-				.onClick(() => {
+		// 颜色选择框（可点击）
+		const colorBox = batchContainer.createDiv('tgm-batch-color-box');
+		colorBox.style.backgroundColor = '#888888'; // 默认灰色
+
+		colorBox.addEventListener('click', () => {
+			// 打开颜色选择器
+			new ColorPickerModal(
+				this.app,
+				this.plugin,
+				selectedColor || '#3b82f6',
+				(color: string) => {
+					selectedColor = color;
+					// 更新颜色框显示
+					if (color.startsWith('var(--color-')) {
+						// 预设颜色，使用对应的RGB值作为预览
+						const presetMap: { [key: string]: string } = {
+							'var(--color-red)': '#e74c3c',
+							'var(--color-blue)': '#3498db',
+							'var(--color-green)': '#2ecc71',
+							'var(--color-orange)': '#f39c12',
+							'var(--color-purple)': '#9b59b6',
+							'var(--color-cyan)': '#1abc9c',
+							'var(--color-pink)': '#e91e63'
+						};
+						colorBox.style.backgroundColor = presetMap[color] || color;
+					} else {
+						colorBox.style.backgroundColor = color;
+					}
+				}
+			).open();
+		});
+
+		// 应用颜色按钮
+		const applyBtn = batchContainer.createEl('button', {
+			text: i18n.t('settings.applyColor'),
+			cls: 'mod-cta tgm-batch-apply-btn'
+		});
+
+		applyBtn.addEventListener('click', async () => {
+			const pattern = patternInput.value.trim();
+
+			if (!pattern) {
+				new Notice(i18n.t('settings.pleaseEnterPattern'));
+				return;
+			}
+
+			if (!selectedColor) {
+				new Notice(i18n.t('settings.pleaseSelectColor'));
+				return;
+			}
+
+			// 获取所有标签组中的标签
+			const allTagsSet = new Set<string>();
+			this.plugin.settings.tagGroups.forEach(group => {
+				group.tags.forEach(tag => {
+					allTagsSet.add(tag);
+				});
+			});
+			const allTags = Array.from(allTagsSet);
+
+
+			// 匹配标签
+			let matchedTags: string[] = [];
+			try {
+				const regex = new RegExp(pattern);
+				matchedTags = allTags.filter(tag => regex.test(tag));
+			} catch (e) {
+				// 如果不是有效的正则表达式，则作为普通字符串匹配
+				matchedTags = allTags.filter(tag => tag.includes(pattern));
+			}
+
+			if (matchedTags.length === 0) {
+				new Notice(i18n.t('settings.noMatchingTags'));
+				return;
+			}
+
+			// 应用颜色到匹配的标签
+			matchedTags.forEach(tag => {
+				const existingIndex = this.plugin.settings.tagColorMappings.findIndex(
+					m => m.pattern === tag && !m.isRegex
+				);
+
+				if (existingIndex >= 0) {
+					// 更新现有映射
+					this.plugin.settings.tagColorMappings[existingIndex].color = selectedColor;
+					this.plugin.settings.tagColorMappings[existingIndex].enabled = true;
+				} else {
+					// 添加新映射
 					this.plugin.settings.tagColorMappings.push({
-						pattern: '',
-						color: '#3b82f6',
+						pattern: tag,
+						color: selectedColor,
 						isRegex: false,
 						enabled: true
 					});
-					void this.saveSettingsAndRefreshDisplay();
-				}));
+				}
+			});
 
-		// 显示现有颜色映射
-		this.plugin.settings.tagColorMappings.forEach((mapping, index) => {
-			const mappingContainer = colorMappingSection.createDiv('color-mapping-item-compact');
+			await this.saveSettingsAndRefreshDisplay();
+			new Notice(i18n.t('settings.colorAppliedSuccess').replace('{count}', matchedTags.length.toString()));
 
-			// 创建单行设置，包含所有控件
-			const setting = new Setting(mappingContainer)
-				.setName(`${i18n.t('settings.colorMapping')} ${index + 1}`)
-				.setDesc('')
-				.addToggle(toggle => toggle
-					.setValue(mapping.enabled)
-					.setTooltip(i18n.t('settings.enabled'))
-					.onChange((value) => {
-						this.plugin.settings.tagColorMappings[index].enabled = value;
-						void this.plugin.saveSettings().catch(err => {
-							console.error("Failed to save settings:", err);
-							new Notice("Failed to save settings.");
-						});
-					}))
-				.addText(text => text
-					.setPlaceholder(i18n.t('settings.patternPlaceholder'))
-					.setValue(mapping.pattern)
-					.onChange((value) => {
-						this.plugin.settings.tagColorMappings[index].pattern = value;
-						void this.plugin.saveSettings().catch(err => {
-							console.error("Failed to save settings:", err);
-							new Notice("Failed to save settings.");
-						});
-					}))
-				.addToggle(toggle => toggle
-					.setValue(mapping.isRegex)
-					.setTooltip(i18n.t('settings.useRegex'))
-					.onChange((value) => {
-						this.plugin.settings.tagColorMappings[index].isRegex = value;
-						void this.plugin.saveSettings().catch(err => {
-							console.error("Failed to save settings:", err);
-							new Notice("Failed to save settings.");
-						});
-					}));
+			// 清空输入框
+			patternInput.value = '';
+			selectedColor = '';
+			colorBox.style.backgroundColor = '#888888';
+		});
 
-			// 添加预设颜色选择器
-			this.addPresetColorPicker(setting, mapping, index);
+		// 清除颜色按钮
+		const clearBtn = batchContainer.createEl('button', {
+			text: i18n.t('settings.clearColor'),
+			cls: 'tgm-batch-clear-btn'
+		});
 
-			setting.addButton(cb => cb
-				.setButtonText(i18n.t('settings.delete'))
-				.setWarning()
-				.onClick(() => {
-					this.plugin.settings.tagColorMappings.splice(index, 1);
-					void this.saveSettingsAndRefreshDisplay();
-				}));
+		clearBtn.addEventListener('click', async () => {
+			const pattern = patternInput.value.trim();
+
+			if (!pattern) {
+				new Notice(i18n.t('settings.pleaseEnterPattern'));
+				return;
+			}
+
+			// 获取所有标签组中的标签
+			const allTagsSet = new Set<string>();
+			this.plugin.settings.tagGroups.forEach(group => {
+				group.tags.forEach(tag => {
+					allTagsSet.add(tag);
+				});
+			});
+			const allTags = Array.from(allTagsSet);
+
+
+			// 匹配标签
+			let matchedTags: string[] = [];
+			try {
+				const regex = new RegExp(pattern);
+				matchedTags = allTags.filter(tag => regex.test(tag));
+			} catch (e) {
+				// 如果不是有效的正则表达式，则作为普通字符串匹配
+				matchedTags = allTags.filter(tag => tag.includes(pattern));
+			}
+
+			if (matchedTags.length === 0) {
+				new Notice(i18n.t('settings.noMatchingTags'));
+				return;
+			}
+
+			// 移除匹配标签的所有映射
+			const originalLength = this.plugin.settings.tagColorMappings.length;
+			this.plugin.settings.tagColorMappings = this.plugin.settings.tagColorMappings.filter(
+				m => !matchedTags.includes(m.pattern)
+			);
+			const removedCount = originalLength - this.plugin.settings.tagColorMappings.length;
+
+			await this.saveSettingsAndRefreshDisplay();
+			new Notice(i18n.t('settings.colorClearedSuccess').replace('{count}', removedCount.toString()));
+
+			// 清空输入框
+			patternInput.value = '';
 		});
 	}
+
 
 	// 添加预设颜色选择器
 	addPresetColorPicker(setting: Setting, mapping: TagColorMapping, index: number): void {
@@ -1517,6 +1923,7 @@ class TagGroupView extends ItemView {
 	constructor(leaf: WorkspaceLeaf, plugin: TagGroupManagerPlugin) {
 		super(leaf);
 		this.plugin = plugin;
+		this.icon = 'star';
 	}
 
 	getViewType(): string {
@@ -1609,7 +2016,7 @@ class TagGroupView extends ItemView {
 
 				// 应用自定义颜色（如果启用且有匹配的颜色映射）
 				if (this.plugin.settings.enableCustomColors) {
-					const customColor = getTagColor(tag, this.plugin.settings.tagColorMappings);
+					const customColor = getTagColor(tag, this.plugin.settings);
 					if (customColor) {
 						// 检查是否是预设的彩虹颜色
 						const isRainbowColor = customColor.startsWith('var(--color-');
@@ -1625,12 +2032,45 @@ class TagGroupView extends ItemView {
 							if (colorClass) {
 								tagEl.addClass(colorClass);
 							} else {
-								// 对于自定义颜色，使用数据属性
-								tagEl.setAttribute('data-custom-color', customColor);
+								// 对于自定义颜色，使用类似彩虹目录的渐变效果
+								const hexToRgb = (hex: string) => {
+									const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+									return result ? {
+										r: parseInt(result[1], 16),
+										g: parseInt(result[2], 16),
+										b: parseInt(result[3], 16)
+									} : null;
+								};
+
+								const rgb = hexToRgb(customColor);
+								if (rgb) {
+									// 排序模式使用淡渐变(0.06)，插入模式使用深渐变(0.5)
+									const gradientEnd = this.isInsertMode ? 0.5 : 0.06;
+									const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)`;
+									const textColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.85)`;
+									const borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+
+									tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${gradientEnd}))`, 'important');
+									tagEl.style.setProperty('color', textColor, 'important');
+									tagEl.style.setProperty('border-color', borderColor, 'important');
+								}
 							}
 
 							tagEl.addClass('custom-colored-tag');
 						}
+					} else {
+						// 开启颜色映射但未设置特定颜色时，使用默认的彩虹风格渐变
+						const defaultRgb = { r: 148, g: 163, b: 184 };
+						// 排序模式使用淡渐变(0.06)，插入模式使用深渐变(0.5)
+						const gradientEnd = this.isInsertMode ? 0.5 : 0.06;
+						const bgColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.08)`;
+						const textColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.85)`;
+						const borderColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.15)`;
+
+						tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, ${gradientEnd}))`, 'important');
+						tagEl.style.setProperty('color', textColor, 'important');
+						tagEl.style.setProperty('border-color', borderColor, 'important');
+						tagEl.addClass('tgm-default-rainbow-tag');
 					}
 				}
 
