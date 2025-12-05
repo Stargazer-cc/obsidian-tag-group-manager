@@ -17,7 +17,7 @@
     "noNewTagsAdded": "No new tags added",
     "deleteGroup": "Delete group",
     "deleteGroupConfirm": "Are you sure you want to delete this group?",
-    "importantTips": "🔥 Important tips",
+    "importantTips": "> Tag Group Manager Complete Guide",
     "tagOverviewTips": "Tag overview view",
     "floatingTagSelectorTips": "Floating tag selector",
     "tip1": "Find the star icon in the left sidebar and click it to open the sort/insert quick page in the right sidebar area.",
@@ -119,5 +119,22 @@
     "cycleButtonTooltip1": "Cyclic mode: enabled — click to turn off cyclic mode. Shift+click to update the tag list from the tag group.",
     "cycleButtonTooltip2": "Cyclic mode: off — click to turn on cyclic mode to restore all tags. Shift+click to update the tag list from the tag group.",
     "tagcounttip": "Used {count} times in vault"
-  }
+  },
+  "tagGroupSets": {
+    "title": "Tag group sets",
+    "addSet": "Add group set",
+    "editSet": "Edit group set",
+    "deleteSet": "Delete group set",
+    "setName": "Set name",
+    "setIcon": "Icon (Lucide)",
+    "selectGroups": "Select tag groups",
+    "noSets": "No tag group sets created",
+    "confirmDelete": "Are you sure you want to delete this group set?",
+    "setCreated": "Tag group set created",
+    "setUpdated": "Tag group set updated",
+    "setDeleted": "Tag group set deleted",
+    "iconPlaceholder": "e.g. home, star, folder",
+    "namePlaceholder": "Enter set name"
+  },
+  "groupNamesDisplay": "Display included group names directly"
 }

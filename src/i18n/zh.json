@@ -16,7 +16,7 @@
     "noNewTagsAdded": "没有新标签被添加",
     "deleteGroup": "删除组",
     "deleteGroupConfirm": "确定要删除这个组吗?",
-    "importantTips": "🔥 重要Tips",
+    "importantTips": "> Tag Group Manager 完全指南",
     "tagOverviewTips": "标签总览视图",
     "floatingTagSelectorTips": "浮动标签选择器",
     "tip1": "从界面左侧的功能区找到五角星图标,点击后将会在右侧菜单栏区域打开排序/插入快捷页面。",
@@ -119,5 +119,22 @@
     "cycleButtonTooltip1": "循环模式:已开启 - 点击关闭循环模式。",
     "cycleButtonTooltip2": "循环模式:已关闭 - 点击开启循环模式,可恢复所有标签。Shift+点击可从标签组更新标签列表。",
     "tagcounttip": "在库中使用了 {count} 次"
-  }
+  },
+  "tagGroupSets": {
+    "title": "标签组集管理",
+    "addSet": "添加组集",
+    "editSet": "编辑组集",
+    "deleteSet": "删除组集",
+    "setName": "组集名称",
+    "setIcon": "图标 (Lucide)",
+    "selectGroups": "选择包含的标签组",
+    "noSets": "暂无标签组集",
+    "confirmDelete": "确定要删除这个组集吗？",
+    "setCreated": "已创建标签组集",
+    "setUpdated": "已更新标签组集",
+    "setDeleted": "已删除标签组集",
+    "iconPlaceholder": "例如: home, star, folder",
+    "namePlaceholder": "输入组集名称"
+  },
+  "groupNamesDisplay": "直接显示包含的组名"
 }

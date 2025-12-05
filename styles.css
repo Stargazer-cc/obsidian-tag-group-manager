@@ -207,7 +207,7 @@
 }
 
 .tgm-tag-item:hover {
-  transform: scale(1.05);
+  transform: scale(1.06);
   background-color: var(--interactive-accent-hover);
 }
 
@@ -325,12 +325,14 @@
   color: var(--text-on-accent);
   align-items: center;
   padding: 6px;
+  padding-left: 0px;
   margin: 5px -3px;
   background: var(--background-secondary);
   border-radius: 5px;
   cursor: pointer;
   transition: background 0.2s ease;
   min-height: 140px;
+  min-width: fit-content;
   position: relative;
 }
 
@@ -375,7 +377,7 @@
 /* 插入模式下的名称容器样式 */
 .tag-group-item .tag-group-name-container:has(.tag-group-name.insert-mode) {
   margin-left: auto;
-  min-width: 32px;
+  min-width: 40px;
   justify-content: center;
 }
 
@@ -405,7 +407,7 @@
 }
 
 .tag-group-item .tgm-tag-item.clickable:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
   background: var(--interactive-accent);
   color: var(--text-on-accent);
@@ -471,7 +473,6 @@
 
 .tag-group-name-container .tag-group-name.insert-mode {
   writing-mode: vertical-rl;
-  margin-right: 8px;
   padding: 6px 8px;
   height: 100px;
   width: 34px;
@@ -1461,9 +1462,10 @@
 /* 特定位置类 */
 .tgm-position-default {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 300px;
+  top: 80px;
+  right: 40px;
+  width: auto;
+  max-width: 300px;
 }
 
 .tgm-position-draggable {
@@ -1471,172 +1473,7 @@
   cursor: move;
 }
 
-/* 创建一个网格系统用于位置定位 */
-.tgm-position-grid {
-  --grid-cols: 20;
-  --grid-rows: 20;
-}
 
-/* 生成一系列位置类 */
-.tgm-pos-x-0 {
-  left: 0;
-}
-
-.tgm-pos-x-1 {
-  left: 5%;
-}
-
-.tgm-pos-x-2 {
-  left: 10%;
-}
-
-.tgm-pos-x-3 {
-  left: 15%;
-}
-
-.tgm-pos-x-4 {
-  left: 20%;
-}
-
-.tgm-pos-x-5 {
-  left: 25%;
-}
-
-.tgm-pos-x-6 {
-  left: 30%;
-}
-
-.tgm-pos-x-7 {
-  left: 35%;
-}
-
-.tgm-pos-x-8 {
-  left: 40%;
-}
-
-.tgm-pos-x-9 {
-  left: 45%;
-}
-
-.tgm-pos-x-10 {
-  left: 50%;
-}
-
-.tgm-pos-x-11 {
-  left: 55%;
-}
-
-.tgm-pos-x-12 {
-  left: 60%;
-}
-
-.tgm-pos-x-13 {
-  left: 65%;
-}
-
-.tgm-pos-x-14 {
-  left: 70%;
-}
-
-.tgm-pos-x-15 {
-  left: 75%;
-}
-
-.tgm-pos-x-16 {
-  left: 80%;
-}
-
-.tgm-pos-x-17 {
-  left: 85%;
-}
-
-.tgm-pos-x-18 {
-  left: 90%;
-}
-
-.tgm-pos-x-19 {
-  left: 95%;
-}
-
-.tgm-pos-y-0 {
-  top: 0;
-}
-
-.tgm-pos-y-1 {
-  top: 5%;
-}
-
-.tgm-pos-y-2 {
-  top: 10%;
-}
-
-.tgm-pos-y-3 {
-  top: 15%;
-}
-
-.tgm-pos-y-4 {
-  top: 20%;
-}
-
-.tgm-pos-y-5 {
-  top: 25%;
-}
-
-.tgm-pos-y-6 {
-  top: 30%;
-}
-
-.tgm-pos-y-7 {
-  top: 35%;
-}
-
-.tgm-pos-y-8 {
-  top: 40%;
-}
-
-.tgm-pos-y-9 {
-  top: 45%;
-}
-
-.tgm-pos-y-10 {
-  top: 50%;
-}
-
-.tgm-pos-y-11 {
-  top: 55%;
-}
-
-.tgm-pos-y-12 {
-  top: 60%;
-}
-
-.tgm-pos-y-13 {
-  top: 65%;
-}
-
-.tgm-pos-y-14 {
-  top: 70%;
-}
-
-.tgm-pos-y-15 {
-  top: 75%;
-}
-
-.tgm-pos-y-16 {
-  top: 80%;
-}
-
-.tgm-pos-y-17 {
-  top: 85%;
-}
-
-.tgm-pos-y-18 {
-  top: 90%;
-}
-
-.tgm-pos-y-19 {
-  top: 95%;
-}
 
 /* 动态显示/隐藏样式 */
 .tgm-display-none {
@@ -1723,91 +1560,6 @@
   background-color: var(--background-primary);
 }
 
-/* 重要Tips区域样式 */
-.tgm-tips-container {
-  margin: 0 0 30px 0;
-  padding: 20px;
-  background: linear-gradient(135deg, var(--background-secondary), var(--background-primary));
-  border: 2px solid var(--interactive-accent);
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  position: relative;
-  overflow: hidden;
-}
-
-.tgm-tips-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
-  background-size: 300% 100%;
-  animation: rainbow-border 3s ease-in-out infinite;
-}
-
-@keyframes rainbow-border {
-
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-.tgm-tips-header {
-  margin: 0 0 16px 0 !important;
-  color: var(--text-accent) !important;
-  font-size: 1.3em !important;
-  font-weight: 600 !important;
-  text-align: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.tgm-tips-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-.tgm-tips-section {
-  background: var(--background-primary);
-  padding: 16px;
-  border-radius: 8px;
-  border: 1px solid var(--background-modifier-border);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-}
-
-.tgm-tips-section-title {
-  margin: 0 0 12px 0 !important;
-  color: var(--text-accent) !important;
-  font-size: 1.1em !important;
-  font-weight: 500 !important;
-  padding-bottom: 6px;
-  border-bottom: 2px solid var(--interactive-accent);
-}
-
-.tgm-tips-list {
-  margin: 0 !important;
-  padding-left: 20px !important;
-  color: var(--text-normal);
-  line-height: 1.6;
-}
-
-.tgm-tips-list li {
-  margin: 8px 0 !important;
-  padding: 4px 0;
-  position: relative;
-}
-
-.tgm-tips-list li::marker {
-  color: var(--interactive-accent);
-}
-
 /* 预设颜色区域 */
 .tgm-color-presets {
   display: flex;
@@ -1868,239 +1620,8 @@
   flex: 1;
 }
 
-/* 颜色槽位 */
-.tgm-color-slots {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  padding: 10px;
-  background-color: var(--background-secondary);
-  border-radius: 8px;
-}
-
-.tgm-color-slot {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  cursor: pointer;
-  border: 1px solid var(--background-modifier-border);
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: var(--text-muted);
-}
 
 
-
-/* 标签组容器样式优化 */
-.settings-section .tgm-tags-container {
-  margin: 15px 0;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background-color: var(--background-primary);
-}
-
-/* 重要Tips区域样式 */
-.tgm-tips-container {
-  margin: 0 0 30px 0;
-  padding: 20px;
-  background: linear-gradient(135deg, var(--background-secondary), var(--background-primary));
-  border: 2px solid var(--interactive-accent);
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  position: relative;
-  overflow: hidden;
-}
-
-.tgm-tips-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
-  background-size: 300% 100%;
-  animation: rainbow-border 3s ease-in-out infinite;
-}
-
-@keyframes rainbow-border {
-
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-.tgm-tips-header {
-  margin: 0 0 16px 0 !important;
-  color: var(--text-accent) !important;
-  font-size: 1.3em !important;
-  font-weight: 600 !important;
-  text-align: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.tgm-tips-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-.tgm-tips-section {
-  background: var(--background-primary);
-  padding: 16px;
-  border-radius: 8px;
-  border: 1px solid var(--background-modifier-border);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-}
-
-.tgm-tips-section-title {
-  margin: 0 0 12px 0 !important;
-  color: var(--text-accent) !important;
-  font-size: 1.1em !important;
-  font-weight: 500 !important;
-  padding-bottom: 6px;
-  border-bottom: 2px solid var(--interactive-accent);
-}
-
-.tgm-tips-list {
-  margin: 0 !important;
-  padding-left: 20px !important;
-  color: var(--text-normal);
-  line-height: 1.6;
-}
-
-.tgm-tips-list li {
-  margin: 8px 0 !important;
-  padding: 4px 0;
-  position: relative;
-}
-
-.tgm-tips-list li::marker {
-  color: var(--interactive-accent);
-}
-
-/* 预设颜色区域 */
-.tgm-color-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.tgm-color-preset-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  cursor: pointer;
-  border: 2px solid transparent;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.tgm-color-preset-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-.tgm-color-preset-btn.selected {
-  border-color: var(--text-normal);
-  transform: scale(1.1);
-  box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 4px var(--interactive-accent);
-}
-
-/* 自定义颜色区域 */
-.tgm-custom-color-container {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.tgm-color-picker-control {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  justify-content: space-between;
-  padding: 10px;
-  background-color: var(--background-secondary);
-  border-radius: 8px;
-}
-
-.tgm-color-picker-control input[type="color"] {
-  width: 50px;
-  height: 30px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.tgm-color-picker-control button {
-  flex: 1;
-}
-
-/* 颜色槽位 */
-.tgm-color-slots {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  padding: 10px;
-  background-color: var(--background-secondary);
-  border-radius: 8px;
-}
-
-.tgm-color-slot {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  cursor: pointer;
-  border: 1px solid var(--background-modifier-border);
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: var(--text-muted);
-}
-
-.tgm-color-slot:hover {
-  border-color: var(--interactive-accent);
-  transform: translateY(-2px);
-}
-
-.tgm-color-slot.empty {
-  background-color: var(--background-primary);
-  border-style: dashed;
-}
-
-.tgm-color-slot.empty:hover {
-  background-color: var(--background-modifier-hover);
-  color: var(--text-normal);
-}
-
-.tgm-color-slot.selected {
-  border-color: var(--text-normal);
-  box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 4px var(--interactive-accent);
-}
-
-.tgm-reset-color-btn {
-  background-color: var(--background-modifier-error);
-  color: var(--text-on-accent);
-  opacity: 0.8;
-}
-
-.tgm-reset-color-btn:hover {
-  background-color: var(--background-modifier-error-hover);
-  opacity: 1;
-}
 
 /* 批量颜色操作区域 */
 .tgm-batch-color-container {
@@ -2158,4 +1679,225 @@
 
 .tgm-batch-clear-btn:hover {
   background-color: var(--interactive-hover);
+}
+
+/* ==================== 标签组集 (Tag Group Sets) ==================== */
+
+/* 组集切换按钮 */
+.tgm-group-set-switcher {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.tgm-group-set-switcher:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* 组集切换按钮 - 确保与组名对齐 */
+
+
+.tgm-group-selection-item {
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tgm-group-selection-item:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+
+/* 自定义颜色标签在插入模式下的 hover 效果 */
+.tag-group-item .tgm-tag-item.custom-colored-tag.clickable:hover {
+  box-shadow: 0 6px 12px var(--custom-shadow-color, rgba(148, 163, 184, 0.4)), -3px -3px 8px rgba(255, 255, 255, 0.2) !important;
+}
+
+
+
+.tgm-group-selection-item input[type='checkbox'] {
+  cursor: pointer;
+}
+
+/* 颜色槽位 */
+.tgm-color-slots {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  padding: 10px;
+  background-color: var(--background-secondary);
+  border-radius: 8px;
+}
+
+.tgm-color-slot {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--background-modifier-border);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.tgm-color-slot:hover {
+  border-color: var(--interactive-accent);
+  transform: translateY(-2px);
+}
+
+.tgm-color-slot.empty {
+  background-color: var(--background-primary);
+  border-style: dashed;
+}
+
+.tgm-color-slot.empty:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.tgm-color-slot.selected {
+  border-color: var(--text-normal);
+  box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 4px var(--interactive-accent);
+}
+
+.tgm-reset-color-btn {
+  background-color: var(--background-modifier-error);
+  color: var(--text-on-accent);
+  opacity: 0.8;
+}
+
+.tgm-reset-color-btn:hover {
+  background-color: var(--background-modifier-error-hover);
+  opacity: 1;
+}
+
+/* ==================== 零碎细节优化==================== */
+.color-mapping-subsection .setting-item.setting-item-heading {
+  margin-top: 0px;
+  padding-top: 0px;
+}
+
+/* ==================== 标签组集设置界面优化 ==================== */
+.tgm-group-sets-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tgm-group-set-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: var(--background-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  transition: all 0.2s ease;
+}
+
+.tgm-group-set-item:hover {
+  background-color: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.tgm-group-set-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.tgm-group-set-icon-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: var(--background-primary);
+  border-radius: 6px;
+  color: var(--text-normal);
+  flex-shrink: 0;
+}
+
+.tgm-group-set-icon-preview svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tgm-group-set-name {
+  font-weight: 600;
+  color: var(--text-normal);
+  white-space: nowrap;
+}
+
+.tgm-group-set-groups-list {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: 4px;
+}
+
+.tgm-group-set-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+
+/* Eliminate setting item borders inside group set actions */
+.tgm-group-set-actions .setting-item {
+  border: none;
+  padding: 0;
+  min-height: auto;
+}
+
+.tgm-group-set-actions .setting-item-control {
+  padding-right: 0;
+}
+
+/* Collapsible Tips Callout */
+.tgm-tips-callout {
+  margin-bottom: 20px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background-color: var(--background-primary-alt);
+  overflow: hidden;
+}
+
+.tgm-tips-callout>summary {
+  padding: 10px 15px;
+  cursor: pointer;
+  background-color: var(--background-secondary);
+  font-weight: 600;
+  color: var(--text-normal);
+  list-style: none;
+  /* Hide default marker in some browsers */
+  display: flex;
+  /* Use flexbox for custom icon if needed, but default marker is usually fine */
+  align-items: center;
+}
+
+.tgm-tips-callout>summary:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.tgm-tips-content {
+  padding: 15px;
+  background-color: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
 }
