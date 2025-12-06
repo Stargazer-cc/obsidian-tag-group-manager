@@ -10,7 +10,7 @@
 
 Tag Group Manager is a plugin designed for Obsidian that helps manage and quickly insert tags. It allows users to create custom tag groups and quickly insert tags into notes through a floating window, improving the efficiency of note organization and classification.
 
-![image](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/image.jpg)
+![image](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/dev/%E5%BC%80%E5%90%AF%E9%A2%9C%E8%89%B2%E8%AE%BE%E7%BD%AE.png)
 
 
 ## Features
@@ -108,7 +108,9 @@ Simply search for "Tag Group Manager" in Obsidian's plugin marketplace and click
 
 Notes:
 1. If you want custom colors to be more harmonious and beautiful, avoid using colors that are too dull.
-2. After enabling color settings, tag styles are better adapted to light interfaces. Although adapted for dark interfaces, there may still be some disharmony.
+2. After enabling color settings, tag styles are better adapted to light interfaces. Although adapted for dark interfaces, there may still be some disharmony. If you prefer a simpler tag style with better universal compatibility, you can disable color settings. As shown below: using the default theme color
+
+![Disable Color Settings](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/dev/%E5%85%B3%E9%97%AD%E9%A2%9C%E8%89%B2%E8%AE%BE%E7%BD%AE.png)
 
 ### Using Tag Selector
 
@@ -159,41 +161,7 @@ In the plugin settings page, you can:
 
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/4.png)
 
-## Use Cases
-- Daily tag usage, wanting quick tag insertion
-- Large tag libraries where multi-level tags are undesirable
-- Managing movie libraries, book libraries, and other personal archive collections with tags, working elegantly with Quickadd and Buttons for archive note entry
-  
-## FAQ
 
-**Q: Why aren't my tag groups showing in the command palette?**
-
-A: You must be in an editable view to call these commands.
-
-**Q: How do I make real-time added tags appear in already open tag selectors and overview pages?**
-
-A: In existing tag selectors: Shift+click the cycle icon to refresh the current selector; In tag overview page: Click any tag group name to refresh and switch modes.
-
-**Q: How can I change the color of tag units?**
-
-A: The plugin now supports custom tag color functionality:
-1. Enable "Enable Custom Tag Colors" in settings
-2. Add color mapping by entering tag names or regex patterns
-3. Choose from preset rainbow colors or custom colors
-4. Matching tags will automatically apply the set colors
-
-**Q: What's the difference between rainbow colors and custom colors?**
-
-A: Rainbow colors use the rainbow directory style system with gradient backgrounds, transparency effects, and 3D shadows that automatically adapt to Obsidian themes. Custom colors use solid backgrounds, suitable for scenarios requiring specific colors.
-
-**Q: Which input environments does the plugin support?**
-
-A: The plugin comprehensively supports various input environments:
-- **Source Mode YAML Area**: Uses YAML format insertion (`- tagname`), fixed cursor jumping issue during continuous insertion
-- **Live Preview Properties Panel**: Click to insert directly into Properties (YAML) view without switching modes
-- **Canvas**: Insert tags directly into Canvas cards and embedded notes
-- **Markdown Content**: Uses tag format insertion (`#tagname`)
-- **Other Plugin Input Fields**: Uniformly uses `#tagname` format with automatic space separation for consecutive insertions
 
 ## Regular Expression Syntax Guide
 
@@ -229,8 +197,30 @@ In batch color settings, you can use regular expressions to match multiple tags.
 
 1. **Escape Characters**: Some special characters need to be escaped with backslash `\`, such as `\.`, `\*`, `\+`, etc.
 2. **Case Sensitivity**: Regular expressions are case-sensitive by default
-3. **Testing Recommendation**: Suggest testing with simple patterns first, confirm matching results before applying colors
-4. **Performance Consideration**: Overly complex regular expressions may affect performance, keep them simple
+
+## Use Cases
+- Daily tag usage, wanting quick tag insertion
+- Large tag libraries that need categorization
+- Managing movie libraries, book libraries, and other personal archive collections with tags
+  
+## FAQ
+
+**Q: Why aren't my tag groups showing in the command palette?**
+
+A: You must be in an editable view to call these commands.
+
+**Q: How do I make real-time added tags appear in already open tag selectors and overview pages?**
+
+A: In existing tag selectors: Shift+click the cycle icon to refresh the current selector; In tag overview page: Click any tag group name to refresh and switch modes.
+
+**Q: Which input environments does the plugin support?**
+
+A: The plugin comprehensively supports various input environments:
+- **Source Mode YAML Area**: Uses YAML format insertion (`- tagname`), fixed cursor jumping issue during continuous insertion
+- **Live Preview Properties Panel**: Click to insert directly into Properties (YAML) view without switching modes
+- **Canvas**: Insert tags directly into Canvas cards and embedded notes
+- **Markdown Content**: Uses tag format insertion (`#tagname`)
+- **Other Plugin Input Fields**: Uniformly uses `#tagname` format with automatic space separation for consecutive insertions
 
 
 
