@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, moment, TFile } from 'obsidian';
+import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, moment, TFile, Modal, TextComponent, ColorComponent, Menu, setIcon, MarkdownRenderer, Component } from 'obsidian';
 import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
 import { getAllTags } from "obsidian";
@@ -32,10 +32,19 @@ function insertTagIntoInputElement(inputElement: HTMLInputElement, tag: string, 
 }
 
 const TAG_GROUP_VIEW = 'tag-group-view';
+const CHANGELOG_VIEW_TYPE = 'tgm-changelog-view';
 
 interface TagGroup {
+	id?: string; // 唯一标识符，可选是因为旧数据可能没有
 	name: string;
 	tags: string[];
+}
+
+interface TagGroupSet {
+	id: string;
+	name: string;
+	icon: string;
+	groupIds: string[]; // 包含的标签组 ID 列表 (有序)
 }
 
 interface TagColorMapping {
@@ -48,19 +57,42 @@ interface TagColorMapping {
 interface TagGroupManagerSettings {
 	tagGroups: TagGroup[];
 	showStarButton: boolean;
-	tagColorMappings: TagColorMapping[]; // 新增：标签颜色映射表
-	enableCustomColors: boolean;         // 新增：是否启用自定义颜色功能
+	tagColorMappings: TagColorMapping[]; // 标签颜色映射表 (用于正则/批量)
+	enableCustomColors: boolean;         // 是否启用自定义颜色功能
+	customColors: string[];              // 新增：7个自定义颜色槽
+	tagColors: Record<string, string>;   // 新增：单个标签颜色设置
+	tagGroupSets: TagGroupSet[];         // 新增：标签组集
+	lastSeenVersion: string;             // 记录用户上次看到的版本
 }
 
 const DEFAULT_SETTINGS: TagGroupManagerSettings = {
 	tagGroups: [],
 	showStarButton: true,
 	tagColorMappings: [],
-	enableCustomColors: false
+	enableCustomColors: false,
+	customColors: ['', '', '', '', '', '', ''],
+	tagColors: {},
+	tagGroupSets: [],
+	lastSeenVersion: ''
 };
 
+// 生成 UUID 的简单实现
+function generateUUID(): string {
+	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+		const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+		return v.toString(16);
+	});
+}
+
 // 工具函数：根据标签名获取对应的颜色
-function getTagColor(tagName: string, colorMappings: TagColorMapping[]): string | null {
+function getTagColor(tagName: string, settings: TagGroupManagerSettings): string | null {
+	// 1. 优先检查单个标签的颜色设置
+	if (settings.tagColors && settings.tagColors[tagName]) {
+		return settings.tagColors[tagName];
+	}
+
+	// 2. 检查正则/批量映射
+	const colorMappings = settings.tagColorMappings;
 	if (!colorMappings || colorMappings.length === 0) {
 		return null;
 	}
@@ -114,6 +146,19 @@ export default class TagGroupManagerPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		// 数据迁移：确保所有标签组都有 ID
+		let settingsChanged = false;
+		this.settings.tagGroups.forEach(group => {
+			if (!group.id) {
+				group.id = generateUUID();
+				settingsChanged = true;
+			}
+		});
+
+		if (settingsChanged) {
+			await this.saveSettings();
+		}
+
 		// 使用moment.js获取语言设置（这是Obsidian内部使用的方式）
 		const momentLocale = moment.locale() || 'en';
 		// 如果是中文相关的locale，使用中文，否则使用英文
@@ -124,6 +169,10 @@ export default class TagGroupManagerPlugin extends Plugin {
 		this.registerView(
 			TAG_GROUP_VIEW,
 			(leaf: WorkspaceLeaf) => new TagGroupView(leaf, this)
+		);
+		this.registerView(
+			CHANGELOG_VIEW_TYPE,
+			(leaf: WorkspaceLeaf) => new ChangelogView(leaf, this)
 		);
 
 		// 添加星星按钮到右侧边栏
@@ -140,6 +189,8 @@ export default class TagGroupManagerPlugin extends Plugin {
 		// 添加设置选项卡
 		this.addSettingTab(new TagGroupManagerSettingTab(this.app, this));
 
+		// 检查版本更新并显示更新日志
+		this.checkVersionAndShowChangelog();
 
 		// 添加右键菜单命令：清除笔记中的所有标签
 		this.registerEvent(
@@ -156,6 +207,77 @@ export default class TagGroupManagerPlugin extends Plugin {
 				}
 			})
 		);
+	}
+
+	// 检查版本更新并显示更新日志
+	private checkVersionAndShowChangelog() {
+		const currentVersion = this.manifest.version;
+		const lastSeenVersion = this.settings.lastSeenVersion;
+
+		// 如果是新安装或版本更新
+		if (lastSeenVersion !== currentVersion) {
+			// 获取当前版本的更新日志
+			const changelog = this.getChangelog(currentVersion);
+
+			if (changelog) {
+				// 延迟显示，确保 Obsidian 完全加载
+				setTimeout(async () => {
+					// new ChangelogModal(this.app, currentVersion, changelog).open();
+
+					// 打开一个新的 Leaf (Tab)
+					const leaf = this.app.workspace.getLeaf('tab');
+					await leaf.setViewState({
+						type: CHANGELOG_VIEW_TYPE,
+						active: true
+					});
+
+					// 获取视图实例并设置内容
+					if (leaf.view instanceof ChangelogView) {
+						leaf.view.setChangelog(currentVersion, changelog);
+					}
+				}, 1000);
+			}
+
+			// 更新已看版本
+			this.settings.lastSeenVersion = currentVersion;
+			void this.saveSettings();
+		}
+	}
+
+	// 获取指定版本的更新日志
+	private getChangelog(version: string): string | null {
+		const changelogs: Record<string, string> = {
+			'1.5.10': `
+
+### ✨ 核心功能增强
+- **新增标签组集管理功能**：现在你可以把任意标签组添加到一个“集”中，以应对不同的工作环境。支持在组集内独立排序标签组。不同集的展示和切换均可在右侧功能栏中实现，图标可自定义。
+- **支持实时预览属性插入**：终于不需要切换到源代码模式就能编辑标签了！现在支持直接点击插入到笔记属性（Properties/YAML）区域。
+- **增加 Canvas 支持**：现在可以直接将标签插入到 Canvas 画布中的卡片和内嵌文档里。
+
+### 🚀 体验优化
+- **重构标签颜色设置**：
+    - **交互优化**：独立设置区域，支持普通字符串匹配和正则表达式匹配。支持左键单击进行详细设置（预设/自定义，自动储存7个）。
+    - **样式标准化**：开启后全体标签应用柔和渐变背景样式，统一了彩虹标签、自定义颜色标签在不同模式下的视觉表现。
+- **YAML 连续插入修复**：修复了在源码模式下，连续插入标签会导致光标跳出的问题。
+- **UI & 交互细节**：设置页面“使用说明”显示优化；浮动标签选择器位置及拖动体验丝滑优化。
+
+---
+
+
+### ✨ Core Features
+- **Tag Group Sets**: Manage tag groups in "Sets" for different workflows. Support independent sorting and quick switching via the sidebar menu with custom icons.
+- **Live Preview Properties**: No need to switch source mode anymore! Insert tags directly into the Properties (YAML) section in Live Preview.
+- **Canvas Support**: Fully supported inserting tags into cards and notes within Obsidian Canvas.
+
+### 🚀 Improvements
+- **Refactored Color Settings**:
+    - **Interaction**: Independent settings area supporting string/regex matching. Left-click for detailed settings (presets/custom, history of 7).
+    - **Standardized Styles**: Unified visual styles for rainbow and custom tags with soft gradient backgrounds.
+- **YAML Cursor Fix**: Fixed cursor jumping issue during continuous insertion in YAML frontmatter.
+- **UX Details**: Improved "Usage Tips" display; Smoother positioning and dragging for the Floating Tag Selector.`
+		};
+
+		return changelogs[version] || null;
 	}
 
 	// 清除笔记中的所有标签
@@ -511,33 +633,35 @@ class TagSelectorModal {
 		e.preventDefault();
 
 		// 计算新位置
+		// 计算新位置
 		const newX = e.clientX - this.offsetX;
 		const newY = e.clientY - this.offsetY;
+
+		// 确保在视口范围内
+		const windowWidth = window.innerWidth;
+		const windowHeight = window.innerHeight;
+		const elementWidth = this.rootEl.offsetWidth;
+		const elementHeight = this.rootEl.offsetHeight;
+
+		const boundedX = Math.max(0, Math.min(newX, windowWidth - elementWidth));
+		const boundedY = Math.max(0, Math.min(newY, windowHeight - elementHeight));
 
 		// 拖动时切换到可拖动样式
 		this.rootEl.addClass('tgm-position-element');
 		this.rootEl.addClass('tgm-position-draggable');
-		this.rootEl.addClass('tgm-position-grid');
 		// 移除默认位置
 		this.rootEl.removeClass('tgm-position-default');
 
-		// 移除所有位置类
+		// 移除之前的网格类（清理之前的状态）
+		this.rootEl.removeClass('tgm-position-grid');
 		for (let i = 0; i < 20; i++) {
 			this.rootEl.removeClass(`tgm-pos-x-${i}`);
 			this.rootEl.removeClass(`tgm-pos-y-${i}`);
 		}
 
-		// 计算网格位置
-		const windowWidth = window.innerWidth;
-		const windowHeight = window.innerHeight;
-
-		// 将绝对像素位置转换为网格索引
-		const xIndex = Math.min(19, Math.max(0, Math.floor((newX / windowWidth) * 20)));
-		const yIndex = Math.min(19, Math.max(0, Math.floor((newY / windowHeight) * 20)));
-
-		// 应用网格位置类
-		this.rootEl.addClass(`tgm-pos-x-${xIndex}`);
-		this.rootEl.addClass(`tgm-pos-y-${yIndex}`);
+		// 直接应用位置样式
+		this.rootEl.style.left = `${boundedX}px`;
+		this.rootEl.style.top = `${boundedY}px`;
 	};
 
 	handleMouseUp = () => {
@@ -627,7 +751,7 @@ class TagSelectorModal {
 
 			// 应用自定义颜色（如果启用且有匹配的颜色映射）
 			if (this.plugin && this.plugin.settings.enableCustomColors) {
-				const customColor = getTagColor(tag, this.plugin.settings.tagColorMappings);
+				const customColor = getTagColor(tag, this.plugin.settings);
 				if (customColor) {
 					// 检查是否是预设的彩虹颜色
 					const isRainbowColor = customColor.startsWith('var(--color-');
@@ -643,12 +767,43 @@ class TagSelectorModal {
 						if (colorClass) {
 							tagEl.addClass(colorClass);
 						} else {
-							// 对于自定义颜色，使用数据属性
-							tagEl.setAttribute('data-custom-color', customColor);
+							// 对于自定义颜色，使用类似彩虹目录的渐变效果
+							// 将十六进制颜色转换为 RGB
+							const hexToRgb = (hex: string) => {
+								const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+								return result ? {
+									r: parseInt(result[1], 16),
+									g: parseInt(result[2], 16),
+									b: parseInt(result[3], 16)
+								} : null;
+							};
+
+							const rgb = hexToRgb(customColor);
+							if (rgb) {
+								const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)`;
+								const textColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.85)`;
+								const borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+
+								tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.06))`, 'important');
+								tagEl.style.setProperty('color', textColor, 'important');
+								tagEl.style.setProperty('border-color', borderColor, 'important');
+							}
 						}
 
 						tagEl.addClass('custom-colored-tag');
 					}
+				} else {
+					// 开启颜色映射但未设置特定颜色时，使用默认的彩虹风格渐变
+					// 使用中性的灰蓝色作为默认颜色
+					const defaultRgb = { r: 148, g: 163, b: 184 }; // lighter slate
+					const bgColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.08)`;
+					const textColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.85)`;
+					const borderColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.15)`;
+
+					tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.06))`, 'important');
+					tagEl.style.setProperty('color', textColor, 'important');
+					tagEl.style.setProperty('border-color', borderColor, 'important');
+					tagEl.addClass('tgm-default-rainbow-tag');
 				}
 			}
 
@@ -720,8 +875,45 @@ class TagSelectorModal {
 					activeElement.closest('.CodeMirror')
 				);
 
-				// 如果是输入框但不是Markdown编辑器，使用统一的插入规则
-				if (isInputElement && !isMarkdownEditor) {
+				// 检查是否是 Live Preview 的元数据属性编辑区域 (Properties view)
+				const isMetadataInput = activeElement && activeElement.closest('.metadata-container');
+
+				// 如果是输入框但不是Markdown编辑器，或者是Properties区域
+				if ((isInputElement && !isMarkdownEditor) || (isMetadataInput && isInputElement)) {
+					// 处理 Properties 视图的特殊情况
+					if (isMetadataInput) {
+						if (activeElement.contentEditable === 'true' || activeElement.tagName === 'INPUT') {
+							// 1. 插入文本
+							document.execCommand('insertText', false, tag);
+
+							// 2. 模拟 Enter 键，触发 Obsidian 将文本转换为标签块
+							const eventProps = {
+								key: 'Enter',
+								code: 'Enter',
+								keyCode: 13,
+								which: 13,
+								bubbles: true,
+								cancelable: true,
+								view: window
+							};
+							activeElement.dispatchEvent(new KeyboardEvent('keydown', eventProps));
+							activeElement.dispatchEvent(new KeyboardEvent('keypress', eventProps));
+							activeElement.dispatchEvent(new KeyboardEvent('keyup', eventProps));
+
+							// 在非循环模式下，将标签添加已插入样式
+							if (!this.isInfiniteMode) {
+								tagEl.addClass('tgm-inserted-tag');
+								// Update count display
+								tagCountEl.setText(`${count + 1}`);
+								setTimeout(() => {
+									const newCount = this.getTagCount(tag);
+									tagCountEl.setText(`${newCount}`);
+								}, 3000);
+							}
+							return;
+						}
+					}
+
 					const inputElement = activeElement as HTMLInputElement | HTMLTextAreaElement;
 
 					// 统一的插入规则：带#号，连续插入时空一格
@@ -810,7 +1002,7 @@ class TagSelectorModal {
 							// 在最后一个标签后面添加新标签
 							const pos = { line: lastTagLine + 1, ch: 0 };
 							this.editor.replaceRange('  - ' + tag + '\n', pos);
-							newCursor = { line: lastTagLine + 2, ch: 0 };
+							newCursor = { line: lastTagLine + 1, ch: ('  - ' + tag).length };
 						}
 					} else {
 						// 在正文中使用普通格式
@@ -855,6 +1047,326 @@ class TagSelectorModal {
 	}
 }
 
+// 更新日志视图
+class ChangelogView extends ItemView {
+	plugin: TagGroupManagerPlugin;
+	version: string;
+	changelog: string;
+
+	constructor(leaf: WorkspaceLeaf, plugin: TagGroupManagerPlugin) {
+		super(leaf);
+		this.plugin = plugin;
+	}
+
+	getViewType(): string {
+		return CHANGELOG_VIEW_TYPE;
+	}
+
+	getDisplayText(): string {
+		return `${this.plugin.manifest.name} - What's New`;
+	}
+
+	getIcon(): string {
+		return 'rocket';
+	}
+
+	setChangelog(version: string, changelog: string) {
+		this.version = version;
+		this.changelog = changelog;
+		this.render();
+	}
+
+	async onOpen() {
+		// 初始渲染可能为空，等待 setChangelog 调用
+		this.render();
+	}
+
+	async render() {
+		const container = this.containerEl.children[1];
+		container.empty();
+		container.addClass('tgm-changelog-view');
+
+		const scrollingContainer = container.createDiv('tgm-changelog-scroll-container');
+		scrollingContainer.style.maxWidth = '800px';
+		scrollingContainer.style.margin = '0 auto';
+		scrollingContainer.style.padding = '50px 20px';
+
+		if (this.version && this.changelog) {
+			scrollingContainer.createEl('h1', { text: `What's New in ${this.plugin.manifest.name} ${this.version}` });
+
+			const contentDiv = scrollingContainer.createDiv('markdown-rendered');
+
+			// 使用 Obsidian 的 Markdown 渲染器
+			await MarkdownRenderer.render(
+				this.plugin.app,
+				this.changelog,
+				contentDiv,
+				'/',
+				this // Component
+			);
+		} else {
+			scrollingContainer.createEl('p', { text: 'No changelog loaded.' });
+		}
+	}
+}
+
+// 颜色选择器模态框
+class ColorPickerModal extends Modal {
+	plugin: TagGroupManagerPlugin;
+	initialColor: string;
+	onSave: (color: string) => void;
+	currentPickerColor: string;
+
+	constructor(app: App, plugin: TagGroupManagerPlugin, initialColor: string, onSave: (color: string) => void) {
+		super(app);
+		this.plugin = plugin;
+		this.initialColor = initialColor;
+		this.onSave = onSave;
+		this.currentPickerColor = initialColor.startsWith('#') ? initialColor : '#000000';
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.addClass('tgm-color-picker-modal');
+
+		contentEl.createEl('h2', { text: i18n.t('settings.selectColor') || '选择颜色' });
+
+		// 1. 预设颜色
+		contentEl.createEl('h3', { text: i18n.t('settings.presetColors') || '预设颜色' });
+		const presetsContainer = contentEl.createDiv('tgm-color-presets');
+
+		const presetColors = [
+			{ name: i18n.t('settings.presetRed') || '红色', value: 'var(--color-red)', bg: '#e74c3c' },
+			{ name: i18n.t('settings.presetBlue') || '蓝色', value: 'var(--color-blue)', bg: '#3498db' },
+			{ name: i18n.t('settings.presetGreen') || '绿色', value: 'var(--color-green)', bg: '#2ecc71' },
+			{ name: i18n.t('settings.presetOrange') || '橙色', value: 'var(--color-orange)', bg: '#f39c12' },
+			{ name: i18n.t('settings.presetPurple') || '紫色', value: 'var(--color-purple)', bg: '#9b59b6' },
+			{ name: i18n.t('settings.presetCyan') || '青色', value: 'var(--color-cyan)', bg: '#1abc9c' },
+			{ name: i18n.t('settings.presetPink') || '粉色', value: 'var(--color-pink)', bg: '#e91e63' }
+		];
+
+		presetColors.forEach(preset => {
+			const btn = presetsContainer.createDiv('tgm-color-preset-btn');
+			btn.style.backgroundColor = preset.bg;
+			btn.setAttribute('aria-label', preset.name);
+			if (this.initialColor === preset.value) btn.addClass('selected');
+
+			btn.addEventListener('click', () => {
+				this.onSave(preset.value);
+				this.close();
+			});
+		});
+
+		// 2. 自定义颜色
+		contentEl.createEl('h3', { text: i18n.t('settings.customColors') || '自定义颜色' });
+
+		const customContainer = contentEl.createDiv('tgm-custom-color-container');
+
+		// 颜色选择器
+		const pickerContainer = customContainer.createDiv('tgm-color-picker-control');
+		const colorPicker = new ColorComponent(pickerContainer)
+			.setValue(this.currentPickerColor)
+			.onChange((value) => {
+				this.currentPickerColor = value;
+			});
+
+		const useColorBtn = pickerContainer.createEl('button', { text: i18n.t('settings.useColor') || '使用此颜色' });
+		useColorBtn.addClass('mod-cta');
+
+		// 添加恢复默认按钮
+		const resetBtn = pickerContainer.createEl('button', { text: i18n.t('settings.resetColor') || '恢复默认' });
+		resetBtn.addClass('tgm-reset-color-btn');
+
+		// 槽位
+		const slotsContainer = customContainer.createDiv('tgm-color-slots');
+
+		const renderSlots = () => {
+			slotsContainer.empty();
+			this.plugin.settings.customColors.forEach((color, index) => {
+				const slot = slotsContainer.createDiv('tgm-color-slot');
+				if (color) {
+					slot.style.backgroundColor = color;
+					if (this.initialColor === color) slot.addClass('selected');
+					slot.setAttribute('aria-label', `${i18n.t('settings.useColor') || '使用此颜色'} (Right click to clear)`);
+
+					slot.addEventListener('click', () => {
+						this.onSave(color);
+						this.close();
+					});
+
+					// 右键删除
+					slot.addEventListener('contextmenu', (e) => {
+						e.preventDefault();
+						this.plugin.settings.customColors[index] = '';
+						void this.plugin.saveSettings();
+						renderSlots();
+					});
+				} else {
+					slot.addClass('empty');
+					slot.setText('+');
+					slot.setAttribute('aria-label', i18n.t('settings.saveToSlot') || '保存到此位置');
+					slot.addEventListener('click', () => {
+						// 保存当前选择器颜色到此槽位
+						this.plugin.settings.customColors[index] = this.currentPickerColor;
+						void this.plugin.saveSettings();
+						renderSlots();
+					});
+				}
+			});
+		};
+
+		renderSlots();
+
+		useColorBtn.addEventListener('click', () => {
+			// 自动保存到槽位逻辑
+			const currentColor = this.currentPickerColor;
+
+			// 检查颜色是否已经存在于槽位中
+			const existingIndex = this.plugin.settings.customColors.indexOf(currentColor);
+
+			if (existingIndex === -1) {
+				// 寻找第一个空槽位
+				let targetIndex = this.plugin.settings.customColors.findIndex(c => !c);
+
+				if (targetIndex === -1) {
+					let nextIndex = (this.plugin.settings as any).customColorIndex || 0;
+					targetIndex = nextIndex;
+					(this.plugin.settings as any).customColorIndex = (nextIndex + 1) % 7;
+				}
+
+				this.plugin.settings.customColors[targetIndex] = currentColor;
+				void this.plugin.saveSettings();
+			}
+
+			this.onSave(currentColor);
+			this.close();
+		});
+
+		resetBtn.addEventListener('click', () => {
+			this.onSave(''); // 保存空字符串表示移除自定义颜色
+			this.close();
+		});
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+class TagGroupSetModal extends Modal {
+	plugin: TagGroupManagerPlugin;
+	groupSet: TagGroupSet;
+	onSave: (groupSet: TagGroupSet) => void;
+
+	constructor(plugin: TagGroupManagerPlugin, groupSet: TagGroupSet | null, onSave: (groupSet: TagGroupSet) => void) {
+		super(plugin.app);
+		this.plugin = plugin;
+		this.onSave = onSave;
+
+		// 如果是编辑模式，使用现有数据；如果是新建模式，初始化空数据
+		this.groupSet = groupSet ? { ...groupSet } : {
+			id: generateUUID(),
+			name: '',
+			icon: 'home',
+			groupIds: []
+		};
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+
+		contentEl.createEl('h2', { text: this.groupSet.name ? i18n.t('tagGroupSets.editSet') : i18n.t('tagGroupSets.addSet') });
+
+		// 1. 组集名称
+		new Setting(contentEl)
+			.setName(i18n.t('tagGroupSets.setName'))
+			.addText(text => text
+				.setPlaceholder(i18n.t('tagGroupSets.namePlaceholder'))
+				.setValue(this.groupSet.name)
+				.onChange(value => {
+					this.groupSet.name = value;
+				}));
+
+		// 2. 图标设置
+		new Setting(contentEl)
+			.setName(i18n.t('tagGroupSets.setIcon'))
+			.setDesc(i18n.t('tagGroupSets.iconPlaceholder'))
+			.addText(text => text
+				.setValue(this.groupSet.icon)
+				.onChange(value => {
+					this.groupSet.icon = value;
+				}));
+
+		// 3. 选择包含的标签组
+		contentEl.createEl('h3', { text: i18n.t('tagGroupSets.selectGroups') });
+		const groupsContainer = contentEl.createDiv('tgm-group-selection-container');
+		groupsContainer.style.maxHeight = '300px';
+		groupsContainer.style.overflowY = 'auto';
+		groupsContainer.style.border = '1px solid var(--background-modifier-border)';
+		groupsContainer.style.padding = '10px';
+		groupsContainer.style.borderRadius = '4px';
+
+		// 获取所有可用的标签组
+		const allGroups = this.plugin.settings.tagGroups;
+
+		if (allGroups.length === 0) {
+			groupsContainer.createEl('div', { text: i18n.t('messages.noTagsInGroup'), cls: 'tgm-no-data' });
+		} else {
+			allGroups.forEach(group => {
+				const groupItem = groupsContainer.createDiv('tgm-group-selection-item');
+				groupItem.style.display = 'flex';
+				groupItem.style.alignItems = 'center';
+				groupItem.style.marginBottom = '5px';
+
+				const checkbox = groupItem.createEl('input', { type: 'checkbox' });
+				checkbox.checked = this.groupSet.groupIds.includes(group.id!);
+				checkbox.style.marginRight = '10px';
+
+				checkbox.addEventListener('change', (e) => {
+					const isChecked = (e.target as HTMLInputElement).checked;
+					if (isChecked) {
+						if (!this.groupSet.groupIds.includes(group.id!)) {
+							this.groupSet.groupIds.push(group.id!);
+						}
+					} else {
+						this.groupSet.groupIds = this.groupSet.groupIds.filter(id => id !== group.id);
+					}
+				});
+
+				groupItem.createSpan({ text: group.name });
+			});
+		}
+
+		// 4. 保存按钮
+		const buttonContainer = contentEl.createDiv('tgm-modal-button-container');
+		buttonContainer.style.marginTop = '20px';
+		buttonContainer.style.display = 'flex';
+		buttonContainer.style.justifyContent = 'flex-end';
+
+		const saveBtn = buttonContainer.createEl('button', {
+			text: i18n.t('settings.confirmSelection') || 'Save',
+			cls: 'mod-cta'
+		});
+
+		saveBtn.addEventListener('click', () => {
+			if (!this.groupSet.name.trim()) {
+				new Notice(i18n.t('tagGroupSets.namePlaceholder'));
+				return;
+			}
+			this.onSave(this.groupSet);
+			this.close();
+		});
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
 // 设置选项卡
 class TagGroupManagerSettingTab extends PluginSettingTab {
 	plugin: TagGroupManagerPlugin;
@@ -880,11 +1392,15 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		// ==================== 重要Tips区域 ====================
-		const tipsContainer = containerEl.createDiv('tgm-tips-container');
-		new Setting(tipsContainer).setName(i18n.t('settings.importantTips')).setHeading();
+		// ==================== 重要Tips区域 (Collapsible Callout) ====================
+		const tipsDetails = containerEl.createEl('details');
+		tipsDetails.addClass('tgm-tips-callout');
 
-		const tipsContent = tipsContainer.createDiv('tgm-tips-content');
+		const tipsSummary = tipsDetails.createEl('summary');
+		tipsSummary.addClass('tgm-tips-summary');
+		tipsSummary.setText(i18n.t('settings.importantTips'));
+
+		const tipsContent = tipsDetails.createDiv('tgm-tips-content');
 
 		// 标签总览视图部分
 		const overviewSection = tipsContent.createDiv('tgm-tips-section');
@@ -906,6 +1422,9 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		// ==================== 颜色设置区域 ====================
 		this.renderColorSettings(containerEl);
+
+		// ==================== 组集管理区域 ====================
+		this.renderTagGroupSetSettings(containerEl);
 
 		// ==================== 标签组管理区域 ====================
 		this.renderTagGroupSettings(containerEl);
@@ -932,7 +1451,95 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		// 如果启用了自定义颜色，显示颜色配置界面
 		if (this.plugin.settings.enableCustomColors) {
+			// 添加单个标签颜色设置提示
+			new Setting(colorSection)
+				.setName(i18n.t('settings.singleTagColorSetting'))
+				.setDesc(i18n.t('settings.singleTagColorSettingDesc'));
+
 			this.renderColorMappingSettings(colorSection);
+		}
+	}
+
+	// 渲染组集管理设置界面
+	renderTagGroupSetSettings(containerEl: HTMLElement): void {
+		const groupSetSection = containerEl.createDiv('settings-section');
+		const header = new Setting(groupSetSection)
+			.setName(i18n.t('tagGroupSets.title'))
+			.setHeading();
+
+		// 使用更显眼的按钮替代原来的加号图标
+		const addBtn = header.controlEl.createEl('button', {
+			text: i18n.t('tagGroupSets.addSet'),
+			cls: 'mod-cta'
+		});
+		addBtn.addEventListener('click', () => {
+			new TagGroupSetModal(this.plugin, null, async (newSet) => {
+				this.plugin.settings.tagGroupSets.push(newSet);
+				await this.saveSettingsAndRefreshDisplay();
+				new Notice(i18n.t('tagGroupSets.setCreated'));
+			}).open();
+		});
+
+		const setsContainer = groupSetSection.createDiv('tgm-group-sets-list');
+
+		if (this.plugin.settings.tagGroupSets.length === 0) {
+			setsContainer.createEl('div', {
+				text: i18n.t('tagGroupSets.noSets'),
+				cls: 'tgm-no-data'
+			});
+		} else {
+			this.plugin.settings.tagGroupSets.forEach((set, index) => {
+				const setItem = setsContainer.createDiv('tgm-group-set-item');
+				// 样式将在 CSS 中定义
+
+				const infoContainer = setItem.createDiv('tgm-group-set-info');
+
+				// 1. 图标 (使用 setIcon 渲染真实图标)
+				const iconSpan = infoContainer.createSpan({ cls: 'tgm-group-set-icon-preview' });
+				setIcon(iconSpan, set.icon || 'home');
+
+				// 2. 名称
+				const nameSpan = infoContainer.createEl('strong', { text: set.name, cls: 'tgm-group-set-name' });
+
+				// 3. 包含的标签组名称列表
+				const groupNames = set.groupIds
+					.map(id => this.plugin.settings.tagGroups.find(g => g.id === id)?.name)
+					.filter(name => !!name)
+					.join(', ');
+
+				const groupsSpan = infoContainer.createSpan({
+					text: groupNames ? `[${groupNames}]` : '[]',
+					cls: 'tgm-group-set-groups-list'
+				});
+
+				const actionsContainer = setItem.createDiv('tgm-group-set-actions');
+
+				// 编辑按钮
+				new Setting(actionsContainer)
+					.addExtraButton(btn => btn
+						.setIcon('pencil')
+						.setTooltip(i18n.t('tagGroupSets.editSet'))
+						.onClick(() => {
+							new TagGroupSetModal(this.plugin, set, async (updatedSet) => {
+								this.plugin.settings.tagGroupSets[index] = updatedSet;
+								await this.saveSettingsAndRefreshDisplay();
+								new Notice(i18n.t('tagGroupSets.setUpdated'));
+							}).open();
+						}));
+
+				// 删除按钮
+				new Setting(actionsContainer)
+					.addExtraButton(btn => btn
+						.setIcon('trash')
+						.setTooltip(i18n.t('tagGroupSets.deleteSet'))
+						.onClick(async () => {
+							if (confirm(i18n.t('tagGroupSets.confirmDelete'))) {
+								this.plugin.settings.tagGroupSets.splice(index, 1);
+								await this.saveSettingsAndRefreshDisplay();
+								new Notice(i18n.t('tagGroupSets.setDeleted'));
+							}
+						}));
+			});
 		}
 	}
 
@@ -996,6 +1603,57 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			group.tags.forEach((tag, tagIndex) => {
 				const tagEl = tagsList.createDiv('tgm-tag-item');
 
+				// 应用颜色（如果启用且有颜色设置）
+				if (this.plugin.settings.enableCustomColors) {
+					const customColor = getTagColor(tag, this.plugin.settings);
+					if (customColor) {
+						const isRainbowColor = customColor.startsWith('var(--color-');
+						if (isRainbowColor) {
+							tagEl.addClass('tag-group-manager-rainbow-tag');
+							tagEl.setAttribute('data-color', customColor);
+						} else {
+							tagEl.addClass('tgm-custom-color-tag');
+							const colorClass = getColorClass(customColor);
+							if (colorClass) {
+								tagEl.addClass(colorClass);
+							} else {
+								// 对于自定义颜色，使用类似彩虹目录的渐变效果
+								const hexToRgb = (hex: string) => {
+									const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+									return result ? {
+										r: parseInt(result[1], 16),
+										g: parseInt(result[2], 16),
+										b: parseInt(result[3], 16)
+									} : null;
+								};
+
+								const rgb = hexToRgb(customColor);
+								if (rgb) {
+									const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)`;
+									const textColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.85)`;
+									const borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+
+									tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.06))`, 'important');
+									tagEl.style.setProperty('color', textColor, 'important');
+									tagEl.style.setProperty('border-color', borderColor, 'important');
+								}
+							}
+							tagEl.addClass('custom-colored-tag');
+						}
+					} else {
+						// 开启颜色映射但未设置特定颜色时，使用默认的彩虹风格渐变
+						const defaultRgb = { r: 148, g: 163, b: 184 };
+						const bgColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.08)`;
+						const textColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.85)`;
+						const borderColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.15)`;
+
+						tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.06))`, 'important');
+						tagEl.style.setProperty('color', textColor, 'important');
+						tagEl.style.setProperty('border-color', borderColor, 'important');
+						tagEl.addClass('tgm-default-rainbow-tag');
+					}
+				}
+
 				const tagText = tagEl.createSpan('tgm-tag-text');
 
 				// 检查是否为嵌套标签并添加图标
@@ -1010,10 +1668,40 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				// 使用Obsidian原生的tooltip系统，设置在整个标签项上
 				tagEl.setAttribute('aria-label', `#${tag}`);
 
+				// 添加点击事件打开颜色选择器
+				if (this.plugin.settings.enableCustomColors) {
+					tagEl.addClass('tgm-tag-clickable');
+					tagEl.addEventListener('click', (e) => {
+						// 如果点击的是删除按钮，不打开颜色选择器
+						if ((e.target as HTMLElement).hasClass('tgm-tag-delete-btn')) {
+							return;
+						}
+
+						// 确保customColors已初始化
+						if (!this.plugin.settings.customColors || !Array.isArray(this.plugin.settings.customColors) || this.plugin.settings.customColors.length !== 7) {
+							this.plugin.settings.customColors = ['', '', '', '', '', '', ''];
+						}
+
+						const currentColor = this.plugin.settings.tagColors[tag] || '';
+						new ColorPickerModal(this.app, this.plugin, currentColor, (color) => {
+							// 保存颜色
+							this.plugin.settings.tagColors[tag] = color;
+							void this.plugin.saveSettings();
+							// 刷新显示
+							this.display();
+						}).open();
+					});
+				}
+
 				const deleteBtn = tagEl.createSpan('tgm-tag-delete-btn');
 				deleteBtn.setText('✕');
-				deleteBtn.addEventListener('click', () => {
+				deleteBtn.addEventListener('click', (e) => {
+					e.stopPropagation(); // 阻止冒泡到标签点击事件
 					this.plugin.settings.tagGroups[index].tags.splice(tagIndex, 1);
+					// 同时删除该标签的颜色设置
+					if (this.plugin.settings.tagColors[tag]) {
+						delete this.plugin.settings.tagColors[tag];
+					}
 					void this.saveSettingsAndRefreshDisplay();
 				});
 			});
@@ -1377,83 +2065,186 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 	// 渲染颜色映射设置界面
 	renderColorMappingSettings(containerEl: HTMLElement): void {
-		// 创建颜色映射子区域
-		const colorMappingSection = containerEl.createDiv('color-mapping-subsection');
-		new Setting(colorMappingSection).setName(i18n.t('settings.tagColorMappings')).setHeading();
+		// 创建批量颜色操作区域
+		const batchSection = containerEl.createDiv('color-mapping-subsection');
+		new Setting(batchSection)
+			.setName(i18n.t('settings.batchColorOperation'))
+			.setDesc(i18n.t('settings.batchColorOperationDesc'))
+			.setHeading();
 
-		// 添加说明文字
-		colorMappingSection.createEl('p', {
-			text: i18n.t('settings.colorMappingDesc'),
-			cls: 'setting-item-description'
+		// 创建紧凑的单行操作区域
+		const batchContainer = batchSection.createDiv('tgm-batch-color-container');
+
+		// 存储当前选中的颜色
+		let selectedColor = '';
+
+		// 正则表达式输入框
+		const patternInput = batchContainer.createEl('input', {
+			type: 'text',
+			placeholder: i18n.t('settings.regexPatternPlaceholder'),
+			cls: 'tgm-batch-pattern-input'
 		});
 
-		// 添加新颜色映射按钮
-		new Setting(colorMappingSection)
-			.setName(i18n.t('settings.addColorMapping'))
-			.setDesc(i18n.t('settings.addColorMappingDesc'))
-			.addButton(cb => cb
-				.setButtonText(i18n.t('settings.addColorMapping'))
-				.onClick(() => {
+		// 颜色选择框（可点击）
+		const colorBox = batchContainer.createDiv('tgm-batch-color-box');
+		colorBox.style.backgroundColor = '#888888'; // 默认灰色
+
+		colorBox.addEventListener('click', () => {
+			// 打开颜色选择器
+			new ColorPickerModal(
+				this.app,
+				this.plugin,
+				selectedColor || '#3b82f6',
+				(color: string) => {
+					selectedColor = color;
+					// 更新颜色框显示
+					if (color.startsWith('var(--color-')) {
+						// 预设颜色，使用对应的RGB值作为预览
+						const presetMap: { [key: string]: string } = {
+							'var(--color-red)': '#e74c3c',
+							'var(--color-blue)': '#3498db',
+							'var(--color-green)': '#2ecc71',
+							'var(--color-orange)': '#f39c12',
+							'var(--color-purple)': '#9b59b6',
+							'var(--color-cyan)': '#1abc9c',
+							'var(--color-pink)': '#e91e63'
+						};
+						colorBox.style.backgroundColor = presetMap[color] || color;
+					} else {
+						colorBox.style.backgroundColor = color;
+					}
+				}
+			).open();
+		});
+
+		// 应用颜色按钮
+		const applyBtn = batchContainer.createEl('button', {
+			text: i18n.t('settings.applyColor'),
+			cls: 'mod-cta tgm-batch-apply-btn'
+		});
+
+		applyBtn.addEventListener('click', async () => {
+			const pattern = patternInput.value.trim();
+
+			if (!pattern) {
+				new Notice(i18n.t('settings.pleaseEnterPattern'));
+				return;
+			}
+
+			if (!selectedColor) {
+				new Notice(i18n.t('settings.pleaseSelectColor'));
+				return;
+			}
+
+			// 获取所有标签组中的标签
+			const allTagsSet = new Set<string>();
+			this.plugin.settings.tagGroups.forEach(group => {
+				group.tags.forEach(tag => {
+					allTagsSet.add(tag);
+				});
+			});
+			const allTags = Array.from(allTagsSet);
+
+
+			// 匹配标签
+			let matchedTags: string[] = [];
+			try {
+				const regex = new RegExp(pattern);
+				matchedTags = allTags.filter(tag => regex.test(tag));
+			} catch (e) {
+				// 如果不是有效的正则表达式，则作为普通字符串匹配
+				matchedTags = allTags.filter(tag => tag.includes(pattern));
+			}
+
+			if (matchedTags.length === 0) {
+				new Notice(i18n.t('settings.noMatchingTags'));
+				return;
+			}
+
+			// 应用颜色到匹配的标签
+			matchedTags.forEach(tag => {
+				const existingIndex = this.plugin.settings.tagColorMappings.findIndex(
+					m => m.pattern === tag && !m.isRegex
+				);
+
+				if (existingIndex >= 0) {
+					// 更新现有映射
+					this.plugin.settings.tagColorMappings[existingIndex].color = selectedColor;
+					this.plugin.settings.tagColorMappings[existingIndex].enabled = true;
+				} else {
+					// 添加新映射
 					this.plugin.settings.tagColorMappings.push({
-						pattern: '',
-						color: '#3b82f6',
+						pattern: tag,
+						color: selectedColor,
 						isRegex: false,
 						enabled: true
 					});
-					void this.saveSettingsAndRefreshDisplay();
-				}));
+				}
+			});
 
-		// 显示现有颜色映射
-		this.plugin.settings.tagColorMappings.forEach((mapping, index) => {
-			const mappingContainer = colorMappingSection.createDiv('color-mapping-item-compact');
+			await this.saveSettingsAndRefreshDisplay();
+			new Notice(i18n.t('settings.colorAppliedSuccess').replace('{count}', matchedTags.length.toString()));
 
-			// 创建单行设置，包含所有控件
-			const setting = new Setting(mappingContainer)
-				.setName(`${i18n.t('settings.colorMapping')} ${index + 1}`)
-				.setDesc('')
-				.addToggle(toggle => toggle
-					.setValue(mapping.enabled)
-					.setTooltip(i18n.t('settings.enabled'))
-					.onChange((value) => {
-						this.plugin.settings.tagColorMappings[index].enabled = value;
-						void this.plugin.saveSettings().catch(err => {
-							console.error("Failed to save settings:", err);
-							new Notice("Failed to save settings.");
-						});
-					}))
-				.addText(text => text
-					.setPlaceholder(i18n.t('settings.patternPlaceholder'))
-					.setValue(mapping.pattern)
-					.onChange((value) => {
-						this.plugin.settings.tagColorMappings[index].pattern = value;
-						void this.plugin.saveSettings().catch(err => {
-							console.error("Failed to save settings:", err);
-							new Notice("Failed to save settings.");
-						});
-					}))
-				.addToggle(toggle => toggle
-					.setValue(mapping.isRegex)
-					.setTooltip(i18n.t('settings.useRegex'))
-					.onChange((value) => {
-						this.plugin.settings.tagColorMappings[index].isRegex = value;
-						void this.plugin.saveSettings().catch(err => {
-							console.error("Failed to save settings:", err);
-							new Notice("Failed to save settings.");
-						});
-					}));
+			// 清空输入框
+			patternInput.value = '';
+			selectedColor = '';
+			colorBox.style.backgroundColor = '#888888';
+		});
 
-			// 添加预设颜色选择器
-			this.addPresetColorPicker(setting, mapping, index);
+		// 清除颜色按钮
+		const clearBtn = batchContainer.createEl('button', {
+			text: i18n.t('settings.clearColor'),
+			cls: 'tgm-batch-clear-btn'
+		});
 
-			setting.addButton(cb => cb
-				.setButtonText(i18n.t('settings.delete'))
-				.setWarning()
-				.onClick(() => {
-					this.plugin.settings.tagColorMappings.splice(index, 1);
-					void this.saveSettingsAndRefreshDisplay();
-				}));
+		clearBtn.addEventListener('click', async () => {
+			const pattern = patternInput.value.trim();
+
+			if (!pattern) {
+				new Notice(i18n.t('settings.pleaseEnterPattern'));
+				return;
+			}
+
+			// 获取所有标签组中的标签
+			const allTagsSet = new Set<string>();
+			this.plugin.settings.tagGroups.forEach(group => {
+				group.tags.forEach(tag => {
+					allTagsSet.add(tag);
+				});
+			});
+			const allTags = Array.from(allTagsSet);
+
+
+			// 匹配标签
+			let matchedTags: string[] = [];
+			try {
+				const regex = new RegExp(pattern);
+				matchedTags = allTags.filter(tag => regex.test(tag));
+			} catch (e) {
+				// 如果不是有效的正则表达式，则作为普通字符串匹配
+				matchedTags = allTags.filter(tag => tag.includes(pattern));
+			}
+
+			if (matchedTags.length === 0) {
+				new Notice(i18n.t('settings.noMatchingTags'));
+				return;
+			}
+
+			// 移除匹配标签的所有映射
+			const originalLength = this.plugin.settings.tagColorMappings.length;
+			this.plugin.settings.tagColorMappings = this.plugin.settings.tagColorMappings.filter(
+				m => !matchedTags.includes(m.pattern)
+			);
+			const removedCount = originalLength - this.plugin.settings.tagColorMappings.length;
+
+			await this.saveSettingsAndRefreshDisplay();
+			new Notice(i18n.t('settings.colorClearedSuccess').replace('{count}', removedCount.toString()));
+
+			// 清空输入框
+			patternInput.value = '';
 		});
 	}
+
 
 	// 添加预设颜色选择器
 	addPresetColorPicker(setting: Setting, mapping: TagColorMapping, index: number): void {
@@ -1517,6 +2308,7 @@ class TagGroupView extends ItemView {
 	constructor(leaf: WorkspaceLeaf, plugin: TagGroupManagerPlugin) {
 		super(leaf);
 		this.plugin = plugin;
+		this.icon = 'star';
 	}
 
 	getViewType(): string {
@@ -1535,9 +2327,31 @@ class TagGroupView extends ItemView {
 	}
 
 
+	currentGroupSetId: string | null = null;
+
 	renderTagGroups() {
 		const container = this.containerEl.children[1];
 		container.empty();
+
+		// 1. 确定要渲染的标签组
+		let groupsToRender: TagGroup[] = [];
+		let activeSet: TagGroupSet | undefined;
+
+		if (this.currentGroupSetId) {
+			activeSet = this.plugin.settings.tagGroupSets.find(s => s.id === this.currentGroupSetId);
+			if (activeSet) {
+				// 按照 set.groupIds 的顺序渲染
+				groupsToRender = activeSet.groupIds
+					.map(id => this.plugin.settings.tagGroups.find(g => g.id === id))
+					.filter((g): g is TagGroup => !!g);
+			} else {
+				// 如果找不到组集，回退到默认视图
+				this.currentGroupSetId = null;
+				groupsToRender = this.plugin.settings.tagGroups;
+			}
+		} else {
+			groupsToRender = this.plugin.settings.tagGroups;
+		}
 
 		// 不再需要顶部标题栏，直接通过点击标签组名称切换模式
 
@@ -1545,9 +2359,13 @@ class TagGroupView extends ItemView {
 		const groupContainer = container.createDiv('tag-group-container');
 
 		// 渲染标签组
-		this.plugin.settings.tagGroups.forEach((group, groupIndex) => {
+		groupsToRender.forEach((group, localIndex) => {
+			// 获取在全局数组中的索引，用于后续的数据操作
+			const globalIndex = this.plugin.settings.tagGroups.indexOf(group);
+
 			const groupEl = groupContainer.createDiv('tag-group-item');
-			groupEl.setAttribute('data-group-index', groupIndex.toString());
+			// 关键：这里必须存储全局索引，因为 tagSortables 的逻辑依赖于它来定位数据
+			groupEl.setAttribute('data-group-index', globalIndex.toString());
 
 			// 创建标签组名称容器（包含拖拽手柄和名称）
 			const nameContainer = groupEl.createDiv('tag-group-name-container');
@@ -1583,6 +2401,46 @@ class TagGroupView extends ItemView {
 				this.renderTagGroups();
 			});
 
+			// ==================== 新增：组集切换按钮 ====================
+
+			const switcherBtn = nameContainer.createDiv('tgm-group-set-switcher');
+			// 设置样式类，稍后在CSS中调整位置
+			const iconName = activeSet ? activeSet.icon : 'home';
+			setIcon(switcherBtn, iconName);
+			switcherBtn.setAttribute('aria-label', activeSet ? activeSet.name : i18n.t('tagGroupSets.title'));
+
+			switcherBtn.onclick = (e) => {
+				e.stopPropagation();
+				const menu = new Menu();
+
+				// 1. 总览 (Home)
+				menu.addItem(item => item
+					.setTitle(i18n.t('tagGroupSets.title'))
+					.setIcon('home')
+					.setChecked(this.currentGroupSetId === null)
+					.onClick(() => {
+						this.currentGroupSetId = null;
+						this.renderTagGroups();
+					}));
+
+				menu.addSeparator();
+
+				// 2. 所有组集
+				this.plugin.settings.tagGroupSets.forEach(set => {
+					menu.addItem(item => item
+						.setTitle(set.name)
+						.setIcon(set.icon)
+						.setChecked(this.currentGroupSetId === set.id)
+						.onClick(() => {
+							this.currentGroupSetId = set.id;
+							this.renderTagGroups();
+						}));
+				});
+
+				menu.showAtMouseEvent(e);
+			};
+			// ==========================================================
+
 			// 创建标签容器
 			const tagsContainer = groupEl.createDiv('tags-view-container');
 
@@ -1609,7 +2467,7 @@ class TagGroupView extends ItemView {
 
 				// 应用自定义颜色（如果启用且有匹配的颜色映射）
 				if (this.plugin.settings.enableCustomColors) {
-					const customColor = getTagColor(tag, this.plugin.settings.tagColorMappings);
+					const customColor = getTagColor(tag, this.plugin.settings);
 					if (customColor) {
 						// 检查是否是预设的彩虹颜色
 						const isRainbowColor = customColor.startsWith('var(--color-');
@@ -1625,12 +2483,50 @@ class TagGroupView extends ItemView {
 							if (colorClass) {
 								tagEl.addClass(colorClass);
 							} else {
-								// 对于自定义颜色，使用数据属性
-								tagEl.setAttribute('data-custom-color', customColor);
+								// 对于自定义颜色，使用类似彩虹目录的渐变效果
+								const hexToRgb = (hex: string) => {
+									const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+									return result ? {
+										r: parseInt(result[1], 16),
+										g: parseInt(result[2], 16),
+										b: parseInt(result[3], 16)
+									} : null;
+								};
+
+								const rgb = hexToRgb(customColor);
+								if (rgb) {
+									// 排序模式使用淡渐变(0.06)，插入模式使用深渐变(0.5)
+									const gradientEnd = this.isInsertMode ? 0.5 : 0.06;
+									const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)`;
+									const textColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.85)`;
+									const borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+
+									tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${gradientEnd}))`, 'important');
+									tagEl.style.setProperty('color', textColor, 'important');
+									tagEl.style.setProperty('border-color', borderColor, 'important');
+
+									// 在插入模式下，为 hover 效果添加动态 box-shadow
+									if (this.isInsertMode) {
+										tagEl.style.setProperty('--custom-shadow-color', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`);
+									}
+								}
 							}
 
 							tagEl.addClass('custom-colored-tag');
 						}
+					} else {
+						// 开启颜色映射但未设置特定颜色时，使用默认的彩虹风格渐变
+						const defaultRgb = { r: 148, g: 163, b: 184 };
+						// 排序模式使用淡渐变(0.06)，插入模式使用深渐变(0.5)
+						const gradientEnd = this.isInsertMode ? 0.5 : 0.06;
+						const bgColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.08)`;
+						const textColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.85)`;
+						const borderColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.15)`;
+
+						tagEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, ${gradientEnd}))`, 'important');
+						tagEl.style.setProperty('color', textColor, 'important');
+						tagEl.style.setProperty('border-color', borderColor, 'important');
+						tagEl.addClass('tgm-default-rainbow-tag');
 					}
 				}
 
@@ -1643,6 +2539,9 @@ class TagGroupView extends ItemView {
 
 						// 首先检查是否有任何输入框处于焦点状态（除了Markdown编辑器）
 						const activeElement = document.activeElement as HTMLElement;
+
+						// 提前捕获 cm-editor 引用（Canvas 在点击后可能丢失焦点）
+						const capturedCmEditor = activeElement?.closest('.cm-editor') as HTMLElement | null;
 
 						// 检查是否是输入框或文本区域（但不是Markdown编辑器）
 						const isInputElement = activeElement && (
@@ -1659,9 +2558,60 @@ class TagGroupView extends ItemView {
 							activeElement.closest('.CodeMirror')
 						);
 
+						// 检查是否是 Live Preview 的元数据属性编辑区域 (Properties view)
+						const isMetadataInput = activeElement && activeElement.closest('.metadata-container');
+
 						// 如果是输入框但不是Markdown编辑器，使用统一的插入规则
-						if (isInputElement && !isMarkdownEditor) {
+						// 对 Metadata 区域也使用此规则
+						if ((isInputElement && !isMarkdownEditor) || (isMetadataInput && isInputElement)) {
+							// 如果是 Metadata 区域，我们需要使用 select 之前的文本，因为 metadata input 可能是特殊的
+							if (isMetadataInput) {
+								// 尝试触发 Enter 来确认为一个标签
+								// 对于属性面板中的 tags，通常需要输入文本后按 Enter 才能生成标签块
+								const tagText = tag;
+								if (activeElement.contentEditable === 'true' || activeElement.tagName === 'INPUT') {
+									// 1. 插入文本
+									document.execCommand('insertText', false, tagText);
+
+									// 2. 模拟 Enter 键，触发 Obsidian 将文本转换为标签块
+									activeElement.dispatchEvent(new KeyboardEvent('keydown', {
+										key: 'Enter',
+										code: 'Enter',
+										keyCode: 13,
+										which: 13,
+										bubbles: true,
+										cancelable: true,
+										view: window
+									}));
+
+									activeElement.dispatchEvent(new KeyboardEvent('keypress', {
+										key: 'Enter',
+										code: 'Enter',
+										keyCode: 13,
+										which: 13,
+										bubbles: true,
+										cancelable: true,
+										view: window
+									}));
+
+									activeElement.dispatchEvent(new KeyboardEvent('keyup', {
+										key: 'Enter',
+										code: 'Enter',
+										keyCode: 13,
+										which: 13,
+										bubbles: true,
+										cancelable: true,
+										view: window
+									}));
+
+									return;
+								}
+							}
+
 							const inputElement = activeElement as HTMLInputElement | HTMLTextAreaElement;
+
+							// 如果是输入框但不是Markdown编辑器，使用统一的插入规则
+							// (这里的判断是多余的，已经在上面判断过了，但为了保持逻辑清晰，保留结构)
 
 							// 统一的插入规则：带#号，连续插入时空一格
 							const cursorPos = inputElement.selectionStart ?? 0;
@@ -1689,99 +2639,206 @@ class TagGroupView extends ItemView {
 						}
 
 						// 如果不在搜索框中，则插入到编辑器
-						const mostRecentLeaf = this.app.workspace.getMostRecentLeaf();
+						// 尝试获取当前活动的编辑器
+						let editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+						console.log('[TGM Debug] Tag clicked, MarkdownView editor:', editor ? 'found' : 'not found');
 
-						if (!mostRecentLeaf) {
-							new Notice(i18n.t('messages.noEditorFound') || "未找到可用编辑器，请先打开一个文档");
+						// 如果不是 MarkdownView，尝试从 activeEditor 获取 (支持 Canvas)
+						if (!editor) {
+							// @ts-ignore - activeEditor is available in newer Obsidian versions
+							editor = this.app.workspace.activeEditor?.editor;
+							console.log('[TGM Debug] activeEditor:', editor ? 'found' : 'not found');
+						}
+
+						if (!editor) {
+							// 尝试从最近的 leaf 获取编辑器（当从侧边栏点击时需要）
+							const recentLeaf = this.app.workspace.getMostRecentLeaf();
+							const leafView = recentLeaf?.view;
+							const viewType = leafView?.getViewType();
+							console.log('[TGM Debug] recentLeaf viewType:', viewType);
+
+							// 检查是否是 Markdown 视图
+							if (leafView && viewType === 'markdown') {
+								editor = (leafView as MarkdownView).editor;
+								console.log('[TGM Debug] Got editor from recentLeaf markdown view:', editor ? 'found' : 'not found');
+							}
+						}
+
+						// 如果仍然没有编辑器，尝试 Canvas 视图的特殊处理
+						if (!editor) {
+							const recentLeaf = this.app.workspace.getMostRecentLeaf();
+							const leafView = recentLeaf?.view;
+							const viewType = leafView?.getViewType();
+
+							// 检查是否是 Canvas 视图
+							if (leafView && viewType === 'canvas') {
+								const canvasContainer = leafView.containerEl;
+
+								// 检查 activeElement 是否是 iframe（嵌入的 Markdown 文件）
+								if (activeElement && activeElement.tagName === 'IFRAME') {
+									try {
+										const iframe = activeElement as HTMLIFrameElement;
+										const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+
+										if (iframeDoc) {
+											const iframeCmEditor = iframeDoc.querySelector('.cm-editor') as HTMLElement | null;
+
+											if (iframeCmEditor) {
+												const cmContent = iframeCmEditor.querySelector('.cm-content') as HTMLElement | null;
+												if (cmContent) {
+													cmContent.focus();
+													const tagText = `#${tag} `;
+													iframeDoc.execCommand('insertText', false, tagText);
+													return;
+												}
+											}
+										}
+									} catch (e) {
+										// 静默处理 iframe 访问错误
+									}
+								}
+
+								// 在 Canvas 视图中查找当前焦点的 cm-editor
+								const focusedCmEditor = canvasContainer?.querySelector('.cm-editor.cm-focused') as HTMLElement | null;
+
+								if (focusedCmEditor) {
+									const cmContent = focusedCmEditor.querySelector('.cm-content') as HTMLElement | null;
+									if (cmContent) {
+										cmContent.focus();
+										const tagText = `#${tag} `;
+										document.execCommand('insertText', false, tagText);
+										return;
+									}
+								}
+
+								// 如果没有焦点编辑器，尝试找任何正在编辑的卡片
+								const anyCmEditor = canvasContainer?.querySelector('.cm-editor') as HTMLElement | null;
+								if (anyCmEditor) {
+									const cmContent = anyCmEditor.querySelector('.cm-content') as HTMLElement | null;
+									if (cmContent) {
+										cmContent.focus();
+										const tagText = `#${tag} `;
+										document.execCommand('insertText', false, tagText);
+										return;
+									}
+								}
+							}
+
+							// 使用提前捕获的 cm-editor 引用（备用方案）
+							if (capturedCmEditor) {
+								const cmContent = capturedCmEditor.querySelector('.cm-content') as HTMLElement | null;
+								if (cmContent) {
+									cmContent.focus();
+									const tagText = `#${tag} `;
+									document.execCommand('insertText', false, tagText);
+									return;
+								}
+							}
+
+							// 如果是其他 contenteditable 区域，使用 execCommand 插入
+							if (activeElement && activeElement.contentEditable === 'true') {
+								const selection = document.getSelection();
+								if (selection && selection.rangeCount > 0) {
+									const range = selection.getRangeAt(0);
+									const textNode = range.startContainer;
+									const offset = range.startOffset;
+
+									// 简单的上下文检查 (尝试获取光标前的字符)
+									let charBefore = '';
+									if (textNode.nodeType === Node.TEXT_NODE) {
+										const text = textNode.textContent || '';
+										if (offset > 0) {
+											charBefore = text[offset - 1];
+										}
+									}
+
+									const prefix = (charBefore && charBefore !== ' ' && charBefore !== '\n' && charBefore.trim() !== '') ? ' ' : '';
+									const tagText = `${prefix}#${tag} `;
+
+									document.execCommand('insertText', false, tagText);
+									return;
+								}
+							}
+
+							new Notice(i18n.t('messages.openMarkdownFirst') || "请先打开一个 Markdown 文档并将光标放置在插入位置");
 							return;
 						}
 
-						void mostRecentLeaf.setViewState({ type: "markdown", active: true });
-						// 等待一个短暂的时间让焦点生效
-						setTimeout(() => {
-							const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-							const editor = view?.editor;
+						// 让编辑器重新获得焦点
+						editor.focus();
 
-							if (!editor) {
-								new Notice(i18n.t('messages.openMarkdownFirst') || "请先打开一个 Markdown 文档并将光标放置在插入位置");
-								// console.log("⚠️ 当前 view:", view);
-								return;
+
+						const cursor = editor.getCursor();
+						const line = editor.getLine(cursor.line);
+						const content = editor.getValue();
+						const lines = content.split('\n');
+						let yamlStart = false;
+						let yamlEnd = false;
+						let isInYaml = false;
+						let yamlTagLine = -1;
+
+						// 检查YAML前置元数据区域
+						for (let i = 0; i < lines.length; i++) {
+							if (i === 0 && lines[i].trim() === '---') {
+								yamlStart = true;
+								continue;
 							}
-
-							// 让编辑器重新获得焦点
-							editor.focus();
-
-							const cursor = editor.getCursor();
-							const line = editor.getLine(cursor.line);
-							const content = editor.getValue();
-							const lines = content.split('\n');
-							let yamlStart = false;
-							let yamlEnd = false;
-							let isInYaml = false;
-							let yamlTagLine = -1;
-
-							// 检查YAML前置元数据区域
-							for (let i = 0; i < lines.length; i++) {
-								if (i === 0 && lines[i] === '---') {
-									yamlStart = true;
-									continue;
+							if (yamlStart && lines[i].trim() === '---') {
+								yamlEnd = true;
+								break;
+							}
+							if (yamlStart && !yamlEnd) {
+								// 检查是否在YAML区域内且光标在当前行
+								if (cursor.line === i) {
+									isInYaml = true;
 								}
-								if (yamlStart && lines[i] === '---') {
-									yamlEnd = true;
-									break;
-								}
-								if (yamlStart && !yamlEnd) {
-									// 检查是否在YAML区域内且光标在当前行
-									if (cursor.line === i) {
-										isInYaml = true;
-									}
-									// 查找tags标签所在行
-									if (lines[i].trim().startsWith('tags:')) {
-										yamlTagLine = i;
-									}
+								// 查找tags标签所在行
+								if (lines[i].trim().startsWith('tags:')) {
+									yamlTagLine = i;
 								}
 							}
-							// console.log(`YAML区域状态: 开始=${yamlStart}, 结束=${yamlEnd}, 在区域内=${isInYaml}, tags行=${yamlTagLine}`);
-							let newCursor;
-							let tagText = '';
-							if (isInYaml) {
-								// 在YAML区域内使用YAML格式
-								if (yamlTagLine === -1) {
-									// 如果没有tags标签，创建一个
-									editor.replaceRange('tags:\n  - ' + tag + '\n', cursor);
-									newCursor = { line: cursor.line + 2, ch: 0 };
-								} else {
-									// 在已有的tags下添加新标签
-									// 找到最后一个标签的位置
-									let lastTagLine = yamlTagLine;
-									for (let i = yamlTagLine + 1; i < lines.length; i++) {
-										const line = lines[i].trim();
-										if (line.startsWith('- ')) {
-											lastTagLine = i;
-										} else if (!line.startsWith('  ') || line === '---') {
-											break;
-										}
-									}
-									// 在最后一个标签后面添加新标签
-									const pos = { line: lastTagLine + 1, ch: 0 };
-									editor.replaceRange('  - ' + tag + '\n', pos);
-									newCursor = { line: lastTagLine + 2, ch: 0 };
-								}
+						}
+						console.log(`[TGM YAML Debug] cursor.line=${cursor.line}, yamlStart=${yamlStart}, yamlEnd=${yamlEnd}, isInYaml=${isInYaml}, yamlTagLine=${yamlTagLine}`);
+						console.log(`[TGM YAML Debug] lines[0]='${lines[0]}', lines.length=${lines.length}`);
+						let newCursor;
+						let tagText = '';
+						if (isInYaml) {
+							// 在YAML区域内使用YAML格式
+							if (yamlTagLine === -1) {
+								// 如果没有tags标签，创建一个
+								editor.replaceRange('tags:\n  - ' + tag + '\n', cursor);
+								newCursor = { line: cursor.line + 1, ch: ('  - ' + tag).length };
 							} else {
-								// 在正文中使用普通格式
-								const charBefore = cursor.ch > 0 ? line[cursor.ch - 1] : '\n';
-								const prefix = (charBefore !== ' ' && charBefore !== '\n') ? ' ' : '';
-								tagText = `${prefix}#${tag} `;
-								editor.replaceRange(tagText, cursor);
-								newCursor = {
-									line: cursor.line,
-									ch: cursor.ch + tagText.length
-								};
+								// 在已有的tags下添加新标签
+								// 找到最后一个标签的位置
+								let lastTagLine = yamlTagLine;
+								for (let i = yamlTagLine + 1; i < lines.length; i++) {
+									const line = lines[i].trim();
+									if (line.startsWith('- ')) {
+										lastTagLine = i;
+									} else if (!line.startsWith('  ') || line === '---') {
+										break;
+									}
+								}
+								// 在最后一个标签后面添加新标签
+								const pos = { line: lastTagLine + 1, ch: 0 };
+								editor.replaceRange('  - ' + tag + '\n', pos);
+								newCursor = { line: lastTagLine + 1, ch: ('  - ' + tag).length };
 							}
+						} else {
+							// 在正文中使用普通格式
+							const charBefore = cursor.ch > 0 ? line[cursor.ch - 1] : '\n';
+							const prefix = (charBefore !== ' ' && charBefore !== '\n') ? ' ' : '';
+							tagText = `${prefix}#${tag} `;
+							editor.replaceRange(tagText, cursor);
+							newCursor = {
+								line: cursor.line,
+								ch: cursor.ch + tagText.length
+							};
+						}
 
-							// 将光标移动到插入的标签末尾
-							editor.setCursor(newCursor);
-						}, 50);
+						// 将光标移动到插入的标签末尾
+						editor.setCursor(newCursor);
 					});
 				}
 			});
@@ -1837,12 +2894,30 @@ class TagGroupView extends ItemView {
 				handle: '.tag-group-handle',
 				onEnd: () => {
 					// 更新组的顺序
-					const newGroups: TagGroup[] = [];
+
+					// 1. 获取当前DOM中的组ID顺序
+					const newOrderIds: string[] = [];
 					groupContainer.querySelectorAll('.tag-group-item').forEach((el) => {
-						const index = parseInt(el.getAttribute('data-group-index') || '0');
-						newGroups.push(this.plugin.settings.tagGroups[index]);
+						const index = parseInt(el.getAttribute('data-group-index') || '-1');
+						if (index >= 0 && this.plugin.settings.tagGroups[index]) {
+							const group = this.plugin.settings.tagGroups[index];
+							if (group.id) newOrderIds.push(group.id);
+						}
 					});
-					this.plugin.settings.tagGroups = newGroups;
+
+					if (this.currentGroupSetId && activeSet) {
+						// 2. 如果在组集模式下，只更新该组集的 groupIds
+						activeSet.groupIds = newOrderIds;
+					} else {
+						// 3. 如果在总览模式下，更新全局 tagGroups
+						const newGroups: TagGroup[] = [];
+						groupContainer.querySelectorAll('.tag-group-item').forEach((el) => {
+							const index = parseInt(el.getAttribute('data-group-index') || '0');
+							newGroups.push(this.plugin.settings.tagGroups[index]);
+						});
+						this.plugin.settings.tagGroups = newGroups;
+					}
+
 					void this.plugin.saveSettings().catch(err => {
 						console.error("Failed to save settings:", err);
 						new Notice("Failed to save settings.");
