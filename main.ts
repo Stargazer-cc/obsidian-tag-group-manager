@@ -247,7 +247,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 	// 获取指定版本的更新日志
 	private getChangelog(version: string): string | null {
 		const changelogs: Record<string, string> = {
-			'1.5.10': `## 🇨🇳 中文说明 / Chinese
+			'1.5.10': `
 
 ### ✨ 核心功能增强
 - **新增标签组集管理功能**：现在你可以把任意标签组添加到一个“集”中，以应对不同的工作环境。支持在组集内独立排序标签组。不同集的展示和切换均可在右侧功能栏中实现，图标可自定义。
@@ -263,7 +263,6 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 ---
 
-## 🇺🇸 English Description
 
 ### ✨ Core Features
 - **Tag Group Sets**: Manage tag groups in "Sets" for different workflows. Support independent sorting and quick switching via the sidebar menu with custom icons.
