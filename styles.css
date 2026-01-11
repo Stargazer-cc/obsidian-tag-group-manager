@@ -1055,8 +1055,6 @@
 .settings-section {
   margin: 25px 0;
   padding: 20px;
-  padding-top: 6px;
-  padding-bottom: 20px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   background-color: var(--background-secondary);

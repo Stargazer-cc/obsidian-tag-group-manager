@@ -118,7 +118,24 @@
     "cycleButtonTooltip": "Cyclic mode: off — click to turn on cyclic mode to restore all tags and keep the number the same. Shift+click to update the tag list from the tag group.",
     "cycleButtonTooltip1": "Cyclic mode: enabled — click to turn off cyclic mode. Shift+click to update the tag list from the tag group.",
     "cycleButtonTooltip2": "Cyclic mode: off — click to turn on cyclic mode to restore all tags. Shift+click to update the tag list from the tag group.",
-    "tagcounttip": "Used {count} times in vault"
+    "tagcounttip": "Used {count} times in vault",
+    "invalidTagRename": "Invalid tag rename operation.",
+    "renamingTag": "Renaming #{old} to #{new}...",
+    "renameComplete": "Tag renaming complete. Processed {count} files.",
+    "renameErrors": "Errors occurred in {count} files (check console)."
+  },
+  "rename": {
+    "commandName": "Rename Tag (Global)",
+    "title": "Rename Tag",
+    "oldTagName": "Old Tag Name",
+    "oldTagNameDesc": "Enter the tag name to replace (without #)",
+    "newTagName": "New Tag Name",
+    "newTagNameDesc": "Enter the new tag name (without #)",
+    "button": "Rename",
+    "sectionTitle": "Global Tag Renaming",
+    "includeCanvas": "Include Canvas files",
+    "includeCanvasDesc": "Also replace tags in Canvas text cards and groups (Experimental)",
+    "warning": "This will modify files across your vault. Please ensure you have a backup!"
   },
   "tagGroupSets": {
     "title": "Tag group sets",

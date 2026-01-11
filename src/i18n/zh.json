@@ -118,7 +118,24 @@
     "cycleButtonTooltip": "循环模式:已关闭 - 点击开启循环模式,可恢复所有标签并保持数量不变。Shift+点击可从标签组更新标签列表。",
     "cycleButtonTooltip1": "循环模式:已开启 - 点击关闭循环模式。",
     "cycleButtonTooltip2": "循环模式:已关闭 - 点击开启循环模式,可恢复所有标签。Shift+点击可从标签组更新标签列表。",
-    "tagcounttip": "在库中使用了 {count} 次"
+    "tagcounttip": "在库中使用了 {count} 次",
+    "invalidTagRename": "无效的标签重命名操作",
+    "renamingTag": "正在重命名 #{old} 为 #{new}...",
+    "renameComplete": "标签重命名完成。处理了 {count} 个文件。",
+    "renameErrors": "在 {count} 个文件中发生错误 (请查看控制台)。"
+  },
+  "rename": {
+    "commandName": "全局重命名标签",
+    "title": "重命名标签",
+    "oldTagName": "旧标签名",
+    "oldTagNameDesc": "输入要替换的标签名 (不带 #)",
+    "newTagName": "新标签名",
+    "newTagNameDesc": "输入新的标签名 (不带 #)",
+    "button": "重命名",
+    "sectionTitle": "全局标签重命名",
+    "includeCanvas": "包含 Canvas 文件",
+    "includeCanvasDesc": "同时替换 Canvas 画布中的文本卡片标签 (实验性功能)",
+    "warning": "批量修改标签为高风险行为，慎重操作！"
   },
   "tagGroupSets": {
     "title": "标签组集管理",

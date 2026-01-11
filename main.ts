@@ -2,6 +2,7 @@ import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, W
 import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
 import { getAllTags } from "obsidian";
+import { TagRenamer } from './src/TagRenamer';
 
 
 // Helper function to insert tag into an input element
@@ -207,6 +208,8 @@ export default class TagGroupManagerPlugin extends Plugin {
 				}
 			})
 		);
+
+
 	}
 
 	// 检查版本更新并显示更新日志
@@ -247,7 +250,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 	// 获取指定版本的更新日志
 	private getChangelog(version: string): string | null {
 		const changelogs: Record<string, string> = {
-			'1.5.10': `
+			'1.5.12': `
 
 ### ✨ 核心功能增强
 - **新增标签组集管理功能**：现在你可以把任意标签组添加到一个“集”中，以应对不同的工作环境。支持在组集内独立排序标签组。不同集的展示和切换均可在右侧功能栏中实现，图标可自定义。
@@ -1130,6 +1133,7 @@ class ColorPickerModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass('tgm-color-picker-modal');
 
+
 		contentEl.createEl('h2', { text: i18n.t('settings.selectColor') || '选择颜色' });
 
 		// 1. 预设颜色
@@ -1428,6 +1432,9 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		// ==================== 标签组管理区域 ====================
 		this.renderTagGroupSettings(containerEl);
+
+		// ==================== 全局标签重命名区域 ====================
+		this.renderRenameSettings(containerEl);
 	}
 
 
@@ -1541,6 +1548,56 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 						}));
 			});
 		}
+	}
+
+	// 渲染全局标签重命名设置区域
+	renderRenameSettings(containerEl: HTMLElement): void {
+		const renameSection = containerEl.createDiv('settings-section');
+		new Setting(renameSection).setName(i18n.t('rename.sectionTitle')).setHeading();
+		renameSection.createEl('p', { text: i18n.t('rename.warning'), cls: 'tgm-warning-text' });
+
+		let oldTag = '';
+		let newTag = '';
+		let includeCanvas = false;
+
+		new Setting(renameSection)
+			.setName(i18n.t('rename.oldTagName'))
+			.setDesc(i18n.t('rename.oldTagNameDesc'))
+			.addText(text => text
+				.setPlaceholder(i18n.t('rename.oldTagName'))
+				.onChange(async (value) => {
+					oldTag = value;
+				}));
+
+		new Setting(renameSection)
+			.setName(i18n.t('rename.newTagName'))
+			.setDesc(i18n.t('rename.newTagNameDesc'))
+			.addText(text => text
+				.setPlaceholder(i18n.t('rename.newTagName'))
+				.onChange(async (value) => {
+					newTag = value;
+				}));
+
+		new Setting(renameSection)
+			.setName(i18n.t('rename.includeCanvas'))
+			.setDesc(i18n.t('rename.includeCanvasDesc'))
+			.addToggle(toggle => toggle
+				.setValue(false)
+				.onChange(async (value) => {
+					includeCanvas = value;
+				}));
+
+		new Setting(renameSection)
+			.addButton(btn => btn
+				.setButtonText(i18n.t('rename.button'))
+				.setCta()
+				.onClick(async () => {
+					if (!oldTag || !newTag) {
+						new Notice(i18n.t('rename.warning'));
+						return;
+					}
+					new TagRenamer(this.app, this.plugin).renameTag(oldTag, newTag, includeCanvas);
+				}));
 	}
 
 	// 渲染标签组设置区域
@@ -2937,3 +2994,7 @@ class TagGroupView extends ItemView {
 		return Promise.resolve();
 	}
 }
+
+
+
+
