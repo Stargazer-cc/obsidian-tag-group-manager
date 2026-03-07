@@ -3,6 +3,7 @@ import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
 import { getAllTags } from "obsidian";
 import { TagRenamer } from './src/TagRenamer';
+import { HierarchyBoard } from './src/HierarchyBoard';
 
 
 // Helper function to insert tag into an input element
@@ -64,6 +65,11 @@ interface TagGroupManagerSettings {
 	tagColors: Record<string, string>;   // 新增：单个标签颜色设置
 	tagGroupSets: TagGroupSet[];         // 新增：标签组集
 	lastSeenVersion: string;             // 记录用户上次看到的版本
+	// Multi-level tag adaptation
+	autoExpandMultiLevelTags: boolean;
+	autoAddTags: boolean;
+	autoAddRules: string;
+	enableTextTagStyling: boolean;
 }
 
 const DEFAULT_SETTINGS: TagGroupManagerSettings = {
@@ -74,7 +80,11 @@ const DEFAULT_SETTINGS: TagGroupManagerSettings = {
 	customColors: ['', '', '', '', '', '', ''],
 	tagColors: {},
 	tagGroupSets: [],
-	lastSeenVersion: ''
+	lastSeenVersion: '',
+	autoExpandMultiLevelTags: false,
+	autoAddTags: false,
+	autoAddRules: '',
+	enableTextTagStyling: false
 };
 
 // 生成 UUID 的简单实现
@@ -140,6 +150,7 @@ function getColorClass(colorValue: string): string | null {
 
 export default class TagGroupManagerPlugin extends Plugin {
 	settings: TagGroupManagerSettings;
+	hierarchyBoard: HierarchyBoard;
 	private registeredCommands: string[] = []; // 跟踪已注册的命令ID
 
 
@@ -166,6 +177,10 @@ export default class TagGroupManagerPlugin extends Plugin {
 		const locale = momentLocale.startsWith('zh') ? 'zh' : 'en';
 		i18n.setLocale(locale);
 
+		// Initialize HierarchyBoard
+		this.hierarchyBoard = new HierarchyBoard(this.app, this);
+		this.addChild(this.hierarchyBoard);
+
 		// 注册视图类型
 		this.registerView(
 			TAG_GROUP_VIEW,
@@ -178,6 +193,16 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 		// 添加星星按钮到右侧边栏
 		this.addRibbonIcon('star', i18n.t('overview.title'), () => {
+			// Feature #4: If no groups exist, prompt user and open settings
+			if (this.settings.tagGroups.length === 0) {
+				new Notice(i18n.t('messages.noGroupsCreateFirst') || 'No tag groups found. Please create one in settings.');
+				// Open settings tab
+				// @ts-ignore
+				this.app.setting.open();
+				// @ts-ignore
+				this.app.setting.openTabById(this.manifest.id);
+				return;
+			}
 			// 激活标签组管理器视图
 			void this.activateView();
 			// 关闭所有已打开的标签选择器
@@ -192,6 +217,17 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 		// 检查版本更新并显示更新日志
 		this.checkVersionAndShowChangelog();
+
+		// Apply text tag styling if enabled
+		this.applyTextTagStyling();
+
+		// Auto-run scanner on startup if enabled
+		if (this.settings.autoAddTags) {
+			// Run after a short delay to ensure cache is ready
+			this.app.workspace.onLayoutReady(async () => {
+				await this.autoScanTagsToGroups();
+			});
+		}
 
 		// 添加右键菜单命令：清除笔记中的所有标签
 		this.registerEvent(
@@ -409,6 +445,244 @@ export default class TagGroupManagerPlugin extends Plugin {
 			});
 			void workspace.revealLeaf(leaf);
 		}
+	}
+
+	async convertMultiLevelTagsToGroups() {
+		const allFiles = this.app.vault.getMarkdownFiles();
+		const allTags = new Set<string>();
+
+		for (const file of allFiles) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (cache) {
+				const tags = getAllTags(cache);
+				if (tags) {
+					tags.forEach(t => allTags.add(t.substring(1))); // Remove #
+				}
+			}
+		}
+
+		let changesMade = false;
+
+		// Group candidate tags by "Set/Group" prefix
+		const groupsToUpdate = new Map<string, Set<string>>(); // Key: "Set/Group", Value: Set of tags to add
+
+		for (const tag of allTags) {
+			const parts = tag.split('/');
+			if (parts.length >= 3) {
+				const setName = parts[0];
+				const groupName = parts[1];
+				const key = `${setName}/${groupName}`;
+
+				// Iterate depths from 3 to n
+				// For a tag A/B/C/D. 
+				// We add A/B/C (Parent), A/B/C/D (Leaf - only if depth 3? No, user says Leafs hidden if depth>3)
+				// Filter: Add path P if:
+				// 1. P is a prefix of 'tag' (meaning P has children, i.e., 'tag' itself or deeper)
+				// 2. WAIT. If P is 'tag' itself (Leaf), we check if Depth==3.
+				// 3. If P is a strict prefix (Parent), we Always Add? 
+
+				// Let's iterate all prefixes of 'tag' starting from depth 3 (index 2).
+				for (let i = 2; i < parts.length; i++) {
+					const isLeafOfCurrentTag = (i === parts.length - 1);
+					const depth = i + 1;
+
+					// If it's the leaf of the current tag being processed, ONLY add if Depth is 3.
+					// (Because user says deeper leaves are hidden).
+					// If it's NOT the leaf (it's a parent of the current tag), ALWAYS add.
+					if (!isLeafOfCurrentTag || depth === 3) {
+						const tagToAdd = parts.slice(0, i + 1).join('/');
+						if (!groupsToUpdate.has(key)) groupsToUpdate.set(key, new Set());
+						groupsToUpdate.get(key)!.add(tagToAdd);
+					}
+				}
+			}
+		}
+
+		// Apply updates
+		for (const [key, tagsToAdd] of groupsToUpdate.entries()) {
+			const [setName, groupName] = key.split('/');
+
+			// 1. Find or Create Set
+			let set = this.settings.tagGroupSets.find(s => s.name === setName);
+			if (!set) {
+				set = { id: generateUUID(), name: setName, icon: 'folder', groupIds: [] };
+				this.settings.tagGroupSets.push(set);
+				changesMade = true;
+			}
+
+			// 2. Find or Create Group
+			let group = this.settings.tagGroups.find(g => g.name === groupName);
+			if (!group) {
+				group = { id: generateUUID(), name: groupName, tags: [] };
+				this.settings.tagGroups.push(group);
+				if (!set.groupIds.includes(group.id!)) set.groupIds.push(group.id!);
+				changesMade = true;
+			} else {
+				if (group.id && !set.groupIds.includes(group.id)) {
+					set.groupIds.push(group.id);
+					changesMade = true;
+				}
+			}
+
+			// 3. Add Tags (Sorted)
+			const sortedTags = Array.from(tagsToAdd).sort();
+			for (const t of sortedTags) {
+				if (!group.tags.includes(t)) {
+					group.tags.push(t);
+					changesMade = true;
+				}
+			}
+		}
+
+		if (changesMade) {
+			await this.saveSettings();
+			new Notice(i18n.t('messages.multiLevelConverted') || 'Multi-level tags converted.');
+		} else {
+			new Notice(i18n.t('messages.noMultiLevelConverted') || 'No new tags to convert.');
+		}
+	}
+
+	async autoScanTagsToGroups(): Promise<number> {
+		const rules = this.settings.autoAddRules.split(';').filter(r => r.trim().length > 0);
+		if (rules.length === 0) return 0;
+
+		const allFiles = this.app.vault.getMarkdownFiles();
+		const allTags = new Set<string>(); // All unique tags in vault
+
+		for (const file of allFiles) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (cache) {
+				const tags = getAllTags(cache);
+				if (tags) {
+					tags.forEach(t => allTags.add(t.substring(1)));
+				}
+			}
+		}
+
+		const groupsToUpdate = new Map<string, Set<string>>();
+
+		for (const tag of allTags) {
+			for (const rule of rules) {
+				const parts = rule.split(':');
+				if (parts.length < 2) continue;
+				const pattern = parts[0];
+				const targetGroupName = parts[1];
+
+				let matched = false;
+				try {
+					const regex = new RegExp(pattern, 'i');
+					if (regex.test(tag)) matched = true;
+				} catch {
+					if (tag.toLowerCase().includes(pattern.toLowerCase())) matched = true;
+				}
+
+				if (matched) {
+					const tagParts = tag.split('/');
+					if (tagParts.length >= 3) {
+						// Apply same decomposition logic as convertMultiLevelTagsToGroups
+						// But target group is fixed by rule
+						for (let i = 2; i < tagParts.length; i++) {
+							const isLeafOfCurrentTag = (i === tagParts.length - 1);
+							const depth = i + 1;
+							if (!isLeafOfCurrentTag || depth === 3) {
+								const tagToAdd = tagParts.slice(0, i + 1).join('/');
+								if (!groupsToUpdate.has(targetGroupName)) groupsToUpdate.set(targetGroupName, new Set());
+								groupsToUpdate.get(targetGroupName)!.add(tagToAdd);
+							}
+						}
+					} else {
+						// For non-deep tags, just add them? 
+						// User requirements focused on deep tags. 
+						// If tag is matches and depth < 3, just add it.
+						if (!groupsToUpdate.has(targetGroupName)) groupsToUpdate.set(targetGroupName, new Set());
+						groupsToUpdate.get(targetGroupName)!.add(tag);
+					}
+				}
+			}
+		}
+
+		let addedCount = 0;
+		let changesMade = false;
+
+		for (const [groupName, tagsToAdd] of groupsToUpdate.entries()) {
+			const group = this.settings.tagGroups.find(g => g.name === groupName);
+			if (group) {
+				const sortedTags = Array.from(tagsToAdd).sort();
+				for (const t of sortedTags) {
+					if (!group.tags.includes(t)) {
+						group.tags.push(t);
+						changesMade = true;
+						addedCount++;
+					}
+				}
+			}
+		}
+
+		if (changesMade) {
+			await this.saveSettings();
+		}
+		return addedCount;
+	}
+
+	applyTextTagStyling() {
+		if (!this.settings.enableTextTagStyling) {
+			const existingStyle = document.getElementById('tgm-dynamic-tag-styles');
+			if (existingStyle) existingStyle.remove();
+			return;
+		}
+
+		let css = '';
+		const tagColors = this.settings.tagColors;
+		const presetColors: { [key: string]: string } = {
+			'var(--color-red)': '#e74c3c',
+			'var(--color-blue)': '#3498db',
+			'var(--color-green)': '#2ecc71',
+			'var(--color-orange)': '#f39c12',
+			'var(--color-purple)': '#9b59b6',
+			'var(--color-cyan)': '#1abc9c',
+			'var(--color-pink)': '#e91e63'
+		};
+
+		for (const [tag, color] of Object.entries(tagColors)) {
+			if (!color) continue;
+
+			// Generate styles for Reading View
+			// Use simple RGB conversion
+			let rgb = { r: 0, g: 0, b: 0 };
+
+			let hexColor = color;
+			if (color.startsWith('var(--')) {
+				hexColor = presetColors[color] || '#888888';
+			}
+
+			if (hexColor.startsWith('#')) {
+				const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hexColor);
+				if (result) rgb = { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) };
+			}
+
+			const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+			const borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`;
+			const textColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`;
+
+			css += `
+            .markdown-preview-view a.tag[href="#${tag}" i],
+            .markdown-rendered a.tag[href="#${tag}" i] { 
+                background-color: ${bgColor} !important; 
+                border: 1px solid ${borderColor} !important;
+                color: ${textColor} !important;
+                border-radius: 4px;
+                padding: 0 4px;
+            }
+            `;
+		}
+
+		let styleEl = document.getElementById('tgm-dynamic-tag-styles') as HTMLStyleElement;
+		if (!styleEl) {
+			styleEl = document.createElement('style');
+			styleEl.id = 'tgm-dynamic-tag-styles';
+			document.head.appendChild(styleEl);
+		}
+		styleEl.textContent = css;
 	}
 }
 
@@ -816,14 +1090,43 @@ class TagSelectorModal {
 			// 检查是否为嵌套标签并添加图标
 			let displayText = tag;
 			if (tag.includes('/')) {
-				displayText = `📁 ${tag}`;
+				// Show shortened name (leaf)
+				displayText = `📁 ${tag.split('/').pop()}`;
 				tagTextEl.addClass('nested-tag');
 			}
-
 			tagTextEl.setText(displayText);
 
-			// 使用Obsidian原生的tooltip系统，设置在整个标签项上
-			tagEl.setAttribute('aria-label', tag);
+			// Add Hierarchy Board Trigger (Tag Selector)
+			if (tag.includes('/') && this.plugin) {
+				const triggerEl = tagEl.createDiv('tgm-hierarchy-trigger');
+				triggerEl.setText('>>');
+				// Removed aria-label to reduce noise
+				triggerEl.removeAttribute('aria-label');
+
+				triggerEl.addEventListener('mouseenter', (e) => {
+					const rect = triggerEl.getBoundingClientRect();
+					this.plugin?.hierarchyBoard.show(tag, rect, false, this);
+				});
+
+				triggerEl.addEventListener('mouseleave', (e) => {
+					this.plugin?.hierarchyBoard.hide(200);
+				});
+
+				triggerEl.addEventListener('mousedown', (e) => {
+					e.stopPropagation();
+				});
+
+				triggerEl.addEventListener('click', (e) => {
+					e.stopPropagation();
+					e.stopImmediatePropagation(); // Ensure no other listeners fire
+					e.preventDefault();
+					const rect = triggerEl.getBoundingClientRect();
+					this.plugin?.hierarchyBoard.show(tag, rect, true, this);
+				});
+			}
+
+			// 仅在标签文本容器上设置Tooltip，避免与 >> 触发区冲突
+			tagTextEl.setAttribute('aria-label', tag);
 
 			// 添加标签计数
 			const tagCountEl = tagEl.createDiv('tgm-tag-count');
@@ -1424,6 +1727,9 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		selectorList.createEl('li', { text: i18n.t('settings.tip5') });
 		selectorList.createEl('li', { text: i18n.t('settings.tip6') });
 
+		// ==================== 多级标签适配设置区域 ====================
+		this.renderMultiLevelSettings(containerEl);
+
 		// ==================== 颜色设置区域 ====================
 		this.renderColorSettings(containerEl);
 
@@ -1439,9 +1745,138 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 
 
+
+	renderMultiLevelSettings(containerEl: HTMLElement): void {
+		const section = containerEl.createDiv('settings-section');
+		new Setting(section).setName(i18n.t('multiLevelAdaptation.title') || '多级标签适配').setHeading();
+
+		// 2.1 Auto Expand
+		new Setting(section)
+			.setName(i18n.t('multiLevelAdaptation.autoExpand') || '多级标签自动展开功能')
+			.setDesc(i18n.t('multiLevelAdaptation.autoExpandDesc') || '开启后，将自动将库中的所有多级标签转化为组集和标签组。')
+			// 移除多级标签自动展开开关，仅保留按钮（功能 #6）
+
+			.addButton(btn => btn
+				.setButtonText(i18n.t('multiLevelAdaptation.expandCommand') || '立即展开')
+				.setTooltip(i18n.t('multiLevelAdaptation.autoExpandDesc') || '将库中的所有多级标签转化为组集和标签组')
+				.onClick(async () => {
+					await this.plugin.convertMultiLevelTagsToGroups();
+					this.display();
+				}));
+
+		// 2.2 Insertion Mode removed as per user request (logic defaults to strict hierarchy insertion)
+
+		// 2.3 Auto Add Rules
+		const autoAddSection = section.createDiv('tgm-auto-add-section');
+		new Setting(autoAddSection)
+			.setName(i18n.t('multiLevelAdaptation.autoAddTags') || '自动添加标签至标签组功能设置')
+			.setDesc(i18n.t('multiLevelAdaptation.autoAddTagsDesc') || '根据关键字或者正则表达式，扫描未被划分到标签组的标签，自动将相关标签添加至目标标签组。')
+			.setHeading();
+
+		// Rules List
+		const rulesList = autoAddSection.createDiv('tgm-rules-list');
+		const updateRulesList = () => {
+			rulesList.empty();
+			const rules = this.plugin.settings.autoAddRules.split(';').filter(r => r.trim().length > 0);
+			rules.forEach(rule => {
+				const ruleEl = rulesList.createDiv('tgm-rule-item');
+				const [pattern, group] = rule.split(':');
+				ruleEl.createSpan({ text: `${pattern} -> ${group}`, cls: 'tgm-rule-text' });
+				const deleteBtn = ruleEl.createEl('button', { text: '✕', cls: 'tgm-rule-delete' });
+				deleteBtn.onclick = async () => {
+					const newRules = rules.filter(r => r !== rule).join(';');
+					this.plugin.settings.autoAddRules = newRules;
+					await this.plugin.saveSettings();
+					updateRulesList();
+				};
+			});
+		};
+		updateRulesList();
+
+		// Add Rule UI - Separate Inputs as requested
+		const addRuleContainer = autoAddSection.createDiv('tgm-add-rule-container');
+		addRuleContainer.style.display = 'flex';
+		addRuleContainer.style.gap = '10px';
+		addRuleContainer.style.marginBottom = '10px';
+
+		const patternInput = addRuleContainer.createEl('input', {
+			type: 'text',
+			placeholder: i18n.t('multiLevelAdaptation.rulePlaceholder') || '关键字或正则表达式',
+			cls: 'tgm-rule-input'
+		});
+		// Add Datalist for suggestions
+		const dataListId = 'tgm-group-suggestions';
+		const dataList = addRuleContainer.createEl('datalist', { attr: { id: dataListId } });
+		this.plugin.settings.tagGroups.forEach(g => {
+			dataList.createEl('option', { attr: { value: g.name } });
+		});
+
+		const groupInput = addRuleContainer.createEl('input', {
+			type: 'text',
+			placeholder: i18n.t('multiLevelAdaptation.targetGroupPlaceholder') || '目标标签组名称',
+			cls: 'tgm-rule-group-input'
+		});
+		groupInput.setAttribute('list', dataListId);
+		const addRuleBtn = addRuleContainer.createEl('button', {
+			text: i18n.t('multiLevelAdaptation.addRule') || '添加规则'
+		});
+
+		addRuleBtn.onclick = async () => {
+			const p = patternInput.value.trim();
+			const g = groupInput.value.trim();
+			if (p && g) {
+				const newRule = `${p}:${g}`;
+				const currentRules = this.plugin.settings.autoAddRules.split(';').filter(r => r.trim().length > 0);
+				if (!currentRules.includes(newRule)) {
+					currentRules.push(newRule);
+					this.plugin.settings.autoAddRules = currentRules.join(';');
+					await this.plugin.saveSettings();
+					updateRulesList();
+					patternInput.value = '';
+					groupInput.value = '';
+				}
+			}
+		};
+
+		// Run Now Button
+		new Setting(autoAddSection)
+			.setName(i18n.t('multiLevelAdaptation.runAutoAdd') || '手动刷新')
+			.addButton(btn => btn
+				.setButtonText(i18n.t('multiLevelAdaptation.runAutoAdd') || '立即刷新')
+				.onClick(async () => {
+					const count = await this.plugin.autoScanTagsToGroups();
+					new Notice(i18n.t('messages.scanComplete').replace('{count}', count.toString()));
+					this.display();
+				}));
+
+		// Auto run on startup
+		new Setting(autoAddSection)
+			.setName(i18n.t('multiLevelAdaptation.autoAddOnStartup') || '启动时自动运行')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.autoAddTags) // reusing autoAddTags boolean for "Run on Startup" toggle effectively
+				.onChange(async (value) => {
+					this.plugin.settings.autoAddTags = value;
+					await this.plugin.saveSettings();
+				}));
+
+	}
+
 	// 渲染颜色设置区域
 	renderColorSettings(containerEl: HTMLElement): void {
 		const colorSection = containerEl.createDiv('settings-section');
+		new Setting(colorSection).setName(i18n.t('settings.tagColors')).setHeading();
+
+		// Text Tag Styling (Moved here)
+		new Setting(colorSection)
+			.setName(i18n.t('settings.tagColors') || '标签颜色管理')
+			.setDesc(i18n.t('multiLevelAdaptation.enableStylingDesc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableTextTagStyling)
+				.onChange(async (value) => {
+					this.plugin.settings.enableTextTagStyling = value;
+					await this.plugin.saveSettings();
+					this.plugin.applyTextTagStyling();
+				}));
 		new Setting(colorSection).setName(i18n.t('settings.colorSettings') || '颜色设置').setHeading();
 
 		// 添加自定义颜色功能开关
@@ -2360,7 +2795,7 @@ class TagGroupView extends ItemView {
 	plugin: TagGroupManagerPlugin;
 	private groupSortable: Sortable;
 	private tagSortables: Sortable[] = [];
-	private isInsertMode: boolean = false;
+	public isInsertMode: boolean = false; // Changed to public to allow access from HierarchyBoard
 
 	constructor(leaf: WorkspaceLeaf, plugin: TagGroupManagerPlugin) {
 		super(leaf);
@@ -2513,14 +2948,51 @@ class TagGroupView extends ItemView {
 				// 检查是否为嵌套标签并添加图标
 				let displayText = tag;
 				if (tag.includes('/')) {
-					displayText = `📁 ${tag}`;
+					// Show shortened name (leaf)
+					displayText = `📁 ${tag.split('/').pop()}`;
 					tagTextEl.addClass('nested-tag');
 				}
 
 				tagTextEl.setText(displayText);
 
-				// 使用Obsidian原生的tooltip系统，设置在整个标签项上
-				tagEl.setAttribute('aria-label', tag);
+				// Add Hierarchy Board Trigger - NEW
+				if (tag.includes('/')) {
+					const triggerEl = tagEl.createDiv('tgm-hierarchy-trigger');
+					triggerEl.setText('>>');
+					// Removed aria-label to reduce noise
+					triggerEl.removeAttribute('aria-label');
+
+					// Hover to show (ephemeral)
+					triggerEl.addEventListener('mouseenter', (e) => {
+						const rect = triggerEl.getBoundingClientRect();
+						this.plugin.hierarchyBoard.show(tag, rect, false, this); // false = not pinned
+					});
+
+					// Leave to hide (if not pinned) - handled by Board logic or here?
+					// Usually board handles mouseleave, but trigger also needs to handle it if we want "hover trigger".
+					triggerEl.addEventListener('mouseleave', (e) => {
+						this.plugin.hierarchyBoard.hide(200);
+					});
+
+					triggerEl.addEventListener('mousedown', (e) => {
+						e.stopPropagation();
+					});
+
+					// Click to PIN or Toggle
+					triggerEl.addEventListener('click', (e) => {
+						e.stopPropagation();
+						e.stopImmediatePropagation();
+						e.preventDefault();
+						const rect = triggerEl.getBoundingClientRect();
+						// If already shown and same tag, toggle pin? OR just show pinned.
+						// Requirement: "Clicking trigger area executes... closing logic (needs manual close)".
+						// This implies clicking opens it in a "Manual Close Only" (Pinned) state.
+						this.plugin.hierarchyBoard.show(tag, rect, true, this); // true = pinned
+					});
+				}
+
+				// 仅在标签文本容器上设置Tooltip，避免与 >> 触发区冲突
+				tagTextEl.setAttribute('aria-label', tag);
 
 				// 应用自定义颜色（如果启用且有匹配的颜色映射）
 				if (this.plugin.settings.enableCustomColors) {

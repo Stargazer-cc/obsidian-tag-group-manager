@@ -32,6 +32,7 @@
     "noTagsFound": "No tags found",
     "basicSettings": "Basic settings",
     "colorSettings": "Color settings",
+    "tagColors": "Tag Color Management",
     "tagGroupSettings": "Tag group management",
     "currentLanguage": "Current language",
     "languageAutoDetected": "Language automatically detected based on Obsidian's language settings",
@@ -122,7 +123,9 @@
     "invalidTagRename": "Invalid tag rename operation.",
     "renamingTag": "Renaming #{old} to #{new}...",
     "renameComplete": "Tag renaming complete. Processed {count} files.",
-    "renameErrors": "Errors occurred in {count} files (check console)."
+    "renameErrors": "Errors occurred in {count} files (check console).",
+    "scanComplete": "Scan complete, automatically categorized {count} tags.",
+    "cannotInsertInSortMode": "Tag insertion is disabled in Sort Mode. Please disable sorting to switch back to Insert Mode."
   },
   "rename": {
     "commandName": "Rename Tag (Global)",
@@ -152,6 +155,35 @@
     "setDeleted": "Tag group set deleted",
     "iconPlaceholder": "e.g. home, star, folder",
     "namePlaceholder": "Enter set name"
+  },
+  "multiLevelAdaptation": {
+    "title": "Multi-level Tag Adaptation",
+    "autoExpand": "Auto Expand Multi-level Tags",
+    "autoExpandDesc": "Automatically convert multi-level tags into Sets (Level 1) and Groups (Level 2).",
+    "expandCommand": "Expand Now",
+    "insertionMode": "Insertion Logic",
+    "insertionModeDesc": "Choose how multi-level tags are inserted.",
+    "modeTagOnly": "Tag Only (Leaf)",
+    "modeWithGroup": "With Group Name",
+    "modeWithSet": "With Set & Group Name",
+    "autoAddTags": "Auto-Add Tags to Groups",
+    "autoAddRules": "Auto-Add Rules",
+    "rulePlaceholder": "Keyword or Regex (e.g. ^book/)",
+    "targetGroupPlaceholder": "Target Group Name",
+    "addRule": "Add Rule",
+    "runAutoAdd": "Run Auto-Add Now",
+    "autoAddOnStartup": "Run on Startup",
+    "tagStyling": "Text Tag Styling",
+    "enableStyling": "Enable Text Tag Styling",
+    "enableStylingDesc": "Apply configured colors to tags in Editor and Preview modes.",
+    "useDataJsonColors": "Use configured colors"
+  },
+  "hierarchyBoard": {
+    "title": "Hierarchy Board",
+    "close": "Close",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "noSubTags": "No sub-tags"
   },
   "groupNamesDisplay": "Display included group names directly"
 }
