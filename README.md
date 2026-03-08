@@ -1,63 +1,33 @@
-# Tag Group Manager
+<h1 align="center">Obsidian Tag Group Manager</h1>
 
-![GitHub all releases](https://img.shields.io/github/downloads/stargazer-cc/obsidian-tag-group-manager/total?color=success)
+<div align="center">
 
-- [English](https://github.com/Stargazer-cc/addtags/blob/main/README-EN.md)   
+![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=%23483699&label=插件下载量&query=%24%5B%22tag-group-manager%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json)
+![GitHub release](https://img.shields.io/github/v/release/stargazer-cc/obsidian-tag-group-manager?color=blue)
+![GitHub stars](https://img.shields.io/github/stars/stargazer-cc/obsidian-tag-group-manager?style=flat&color=yellow)
+![License](https://img.shields.io/github/license/stargazer-cc/obsidian-tag-group-manager?color=green)
 
-- 更详细的介绍 [前往Obsidian中文论坛](https://forum-zh.obsidian.md/t/topic/47614)
+[English](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/README-EN.md) | 中文
 
-## 简介
+</div>
 
-Tag Group Manager 是一个为 Obsidian 设计的插件，用于管理和快速插入标签。它允许用户创建自定义标签组，并通过浮动窗口快速将标签插入到笔记中，提高笔记整理和分类的效率。
+Tag Group Manager 是一个为 [Obsidian](https://obsidian.md/) 设计的标签管理增强插件，提供标签组管理、快速标签插入、自定义标签颜色和强大的标签组织功能，用于提升笔记整理和分类效率。
+
+更详细的介绍请访问 [Obsidian 中文论坛](https://forum-zh.obsidian.md/t/topic/47614)
 
 ![image](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/dev/%E5%BC%80%E5%90%AF%E9%A2%9C%E8%89%B2%E8%AE%BE%E7%BD%AE.png)
 
 
-## 功能简介
+## ✨ 功能特性
 
-- **标签组管理**：创建、编辑和删除自定义标签组
-  - 支持手动添加标签，这意味着可以在不同组中添加同一个标签
-  - 支持从笔记库中已有的标签中添加，带有筛选功能，不会被重复添加
-  - 支持批量筛选添加标签，可以一次性添加多个标签到组中，激活的按钮会变绿并显示"确认选择"，清楚表示当前状态
-
-- **标签组集 (Tag Group Sets)**：将多个标签组组织成一个集合，方便在不同场景间切换
-  - **一键切换**：在标签总览视图中，通过组名下方的按钮快速切换不同的标签组集
-  - **独立排序**：每个组集拥有独立的标签组排序，互不干扰
-  - **灵活管理**：支持创建、编辑、删除组集，自定义名称和图标（Lucide）
-
-- **浮动标签选择器**：可拖动、可固定的标签选择界面
-  - **标签组与浮动标签选择器一一对应**：每新建一个标签组，就会注册一个浮动标签选择器生成命令
-  - **快速插入标签**：通过命令面板或者快捷键快速调用某组标签选择器，实现快速插入
-  - **使用后自动变暗**：已使用的标签会切换成另一个状态，避免重复添加，此过程可重置循环
-
-- **标签总览视图**：位于右侧菜单栏的功能集成中心
-  - **插入模式切换**：通过点击任意标签组名称在排序/插入模式间切换
-    - **排序模式**：排序模式下，支持标签组拖拽排序，支持标签跨组排序，标签组名上方显示拖拽句柄
-    - **插入模式**：插入模式下，点击直接插入标签
-  - **组集切换**：通过点击任意标签组集名下方的图标按钮切换不同的标签组集
-    - **标签组排序**：支持标签组拖拽排序，支持标签跨组排序，标签组名上方显示拖拽句柄
-
-- **全方位标签插入支持**
-  - **源代码YAML 区域**：源码模式和实时预览模式下的 YAML frontmatter 区域
-  - **实时预览或者阅读模式的笔记属性面板**：直接点击插入图形界面tags属性的值，无需切换到源码模式
-  - **Canvas 画布支持**：在 Canvas 卡片和内嵌文档中直接插入标签
-  - **搜索框**：支持在Obsidian的各类搜索框中直接插入标签
-  - **其他插件支持**：支持在其他插件的输入框或者编辑器区域中插入标签
-
-- **自定义标签颜色**：为标签设置个性化颜色
-  - **颜色设置总开关**：一键开启/关闭标签颜色功能，不影响已保存的配置
-  - **单标签颜色设置**：左键单击设置页面标签组设置中的标签即可打开颜色设置弹窗
-    - **七种预设颜色**：提供彩虹目录风格的七种预设颜色（红、蓝、绿、橙、紫、青、粉）
-    - **自定义颜色**：支持添加自定义颜色至颜色槽位，自动保存最近使用的7种颜色
-  - **批量颜色设置**：独立设置区域，支持普通字符串匹配和正则表达式匹配
-  - **统一视觉风格**：开启后全体标签应用柔和渐变背景样式
-
-- **多语言支持**：自动检测Obsidian语言设置
-  - 中文用户显示中文界面
-  - 其他语言用户显示英文界面
-
-- **快速清除整篇笔记中的全部标签**
-  - 选中笔记后的右键菜单中有这个命令
+- 📁 **标签组管理** - 创建、编辑和删除自定义标签组，支持手动添加、从库中筛选添加、批量添加标签
+- 📚 **标签组集** - 将多个标签组组织成集合，一键切换不同场景，每个组集独立排序
+- 🎯 **浮动标签选择器** - 可拖动、可固定的标签选择界面，通过命令面板或快捷键快速调用，已使用标签自动变暗
+- 📊 **标签总览视图** - 右侧边栏功能中心，支持排序/插入模式切换、标签拖拽排序、跨组排序
+- 🔌 **全方位插入支持** - 支持 YAML 区域、属性面板、Canvas 画布、搜索框及其他插件的输入区域
+- 🎨 **自定义标签颜色** - 提供七种预设颜色和自定义颜色，支持单标签设置和批量正则匹配设置
+- 🌍 **多语言支持** - 自动检测 Obsidian 语言设置，支持中英文界面
+- 🧹 **快速清除标签** - 右键菜单一键清除整篇笔记中的全部标签
 
   
 

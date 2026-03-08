@@ -1,63 +1,33 @@
-# Tag Group Manager
+<h1 align="center">Obsidian Tag Group Manager</h1>
 
-![GitHub all releases](https://img.shields.io/github/downloads/stargazer-cc/obsidian-tag-group-manager/total?color=success)
+<div align="center">
 
-- [中文](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/README.md)
+![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=%23483699&label=downloads&query=%24%5B%22tag-group-manager%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json)
+![GitHub release](https://img.shields.io/github/v/release/stargazer-cc/obsidian-tag-group-manager?color=blue)
+![GitHub stars](https://img.shields.io/github/stars/stargazer-cc/obsidian-tag-group-manager?style=flat&color=yellow)
+![License](https://img.shields.io/github/license/stargazer-cc/obsidian-tag-group-manager?color=green)
 
-- For more detailed introduction, [visit Obsidian Forum](https://forum.obsidian.md)
+English | [中文](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/README.md)
 
-## Introduction
+</div>
 
-Tag Group Manager is a plugin designed for Obsidian that helps manage and quickly insert tags. It allows users to create custom tag groups and quickly insert tags into notes through a floating window, improving the efficiency of note organization and classification.
+Tag Group Manager is a tag management enhancement plugin for [Obsidian](https://obsidian.md/), providing tag group management, quick tag insertion, custom tag colors, and powerful tag organization features to improve note organization and classification efficiency.
+
+For more detailed introduction, please visit [Obsidian Forum](https://forum.obsidian.md)
 
 ![image](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/dev/%E5%BC%80%E5%90%AF%E9%A2%9C%E8%89%B2%E8%AE%BE%E7%BD%AE.png)
 
 
-## Features
+## ✨ Features
 
-- **Tag Group Management**: Create, edit, and delete custom tag groups
-  - Support manual tag addition, meaning the same tag can be added to different groups
-  - Support adding from existing tags in your vault with filtering functionality, avoiding duplicates
-  - Support batch filtering to add multiple tags to groups at once, activated buttons turn green and display "Confirm Selection" to clearly indicate current state
-
-- **Tag Group Sets**: Organize multiple tag groups into sets for easy context switching
-  - **One-Click Switching**: Quickly switch between different sets via the button below group names in the overview view
-  - **Independent Sorting**: Each set has its own independent tag group order
-  - **Flexible Management**: Create, edit, and delete sets with custom names and icons (Lucide)
-
-- **Floating Tag Selector**: Draggable and pinnable tag selection interface
-  - **One-to-one correspondence between tag groups and floating selectors**: Each new tag group registers a floating selector generation command
-  - **Quick Tag Insertion**: Quickly call the tag selector through the command palette or hotkeys for insertion
-  - **Auto-dimming After Use**: Used tags switch to a different state to avoid duplicate additions, this process can be reset and cycled
-
-- **Tag Overview View**: Functional integration center in the right sidebar
-  - **Insertion Mode Switching**: Switch between sorting/insertion modes by clicking any tag group name
-    - **Sorting Mode**: Supports drag-and-drop sorting of tag groups and cross-group tag sorting, drag handles appear above tag group names
-    - **Insertion Mode**: Click to directly insert tags
-  - **Set Switching**: Switch between different tag group sets by clicking the icon button below any tag group set name
-    - **Tag Group Sorting**: Supports drag-and-drop sorting of tag groups and cross-group tag sorting, drag handles appear above tag group names
-
-- **Comprehensive Tag Insertion Support**
-  - **Source Code YAML Area**: YAML frontmatter in both Source Mode and Live Preview
-  - **Live Preview or Reading Mode Properties Panel**: Click to insert directly into the graphical tags property value without switching to source mode
-  - **Canvas Support**: Insert tags directly into Canvas cards and embedded notes
-  - **Search Box**: Support inserting tags directly into various Obsidian search boxes
-  - **Other Plugin Support**: Support inserting tags into input boxes or editor areas of other plugins
-
-- **Custom Tag Colors**: Set personalized colors for tags
-  - **Color Settings Master Switch**: One-click enable/disable tag color functionality without affecting saved configurations
-  - **Single Tag Color Settings**: Left-click tags in the tag group settings on the settings page to open color settings popup
-    - **Seven Preset Colors**: Provides seven rainbow directory-style preset colors (Red, Blue, Green, Orange, Purple, Cyan, Pink)
-    - **Custom Colors**: Support adding custom colors to color slots, automatically saves last 7 colors used
-  - **Batch Color Settings**: Independent settings area supporting string and regex pattern matching
-  - **Unified Visual Style**: When enabled, all tags apply soft gradient background styles
-
-- **Multi-language Support**: Automatically detects Obsidian language settings
-  - Chinese interface for Chinese users
-  - English interface for other language users
-
-- **Quick Clear All Tags**
-  - Available in the right-click menu when a note is selected
+- 📁 **Tag Group Management** - Create, edit, and delete custom tag groups with manual addition, vault filtering, and batch import
+- 📚 **Tag Group Sets** - Organize multiple tag groups into sets for one-click context switching with independent sorting
+- 🎯 **Floating Tag Selector** - Draggable, pinnable tag selection interface accessible via command palette or hotkeys, with auto-dimming for used tags
+- 📊 **Tag Overview View** - Right sidebar hub with sorting/insertion mode toggle, drag-and-drop reordering, and cross-group sorting
+- 🔌 **Universal Insertion Support** - Works in YAML areas, properties panel, Canvas, search boxes, and other plugin input fields
+- 🎨 **Custom Tag Colors** - Seven preset colors plus custom color picker, with single-tag and batch regex pattern matching
+- 🌍 **Multi-language Support** - Auto-detects Obsidian language settings for Chinese and English interfaces
+- 🧹 **Quick Clear Tags** - Right-click menu option to remove all tags from a note instantly
 
   
 
