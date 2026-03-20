@@ -76,7 +76,10 @@
     "colorAppliedSuccess": "Color applied to {count} tag(s)",
     "colorClearedSuccess": "Color cleared from {count} tag(s)",
     "pleaseSelectColor": "Please select a color first",
-    "pleaseEnterPattern": "Please enter a pattern"
+    "pleaseEnterPattern": "Please enter a pattern",
+    "setGroupColor": "Set Group Color",
+    "setGroupColorDesc": "Apply the same color to all tags in this group",
+    "groupColorApplied": "Color applied to {count} tags in {groupName} group"
   },
   "selector": {
     "drag": "Drag",

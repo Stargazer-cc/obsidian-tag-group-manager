@@ -76,7 +76,10 @@
     "colorClearedSuccess": "已清除 {count} 个标签的颜色",
     "noMatchingTags": "没有匹配的标签",
     "pleaseSelectColor": "请先选择颜色",
-    "pleaseEnterPattern": "请输入匹配模式"
+    "pleaseEnterPattern": "请输入匹配模式",
+    "setGroupColor": "设置组颜色",
+    "setGroupColorDesc": "为整个标签组的所有标签设置相同颜色",
+    "groupColorApplied": "已为 {groupName} 组的 {count} 个标签应用颜色"
   },
   "selector": {
     "drag": "拖动",

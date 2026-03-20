@@ -70,8 +70,12 @@ export class HierarchyBoard extends Component {
 
     show(rootTag: string, triggerRect: DOMRect, pinned: boolean = false, caller?: any) {
         this.caller = caller;
-        this.currentRootTag = rootTag;
-        // Correct positioning logic and robust show
+        
+        // 立即取消任何待处理的隐藏操作
+        if (this.hTimer) {
+            window.clearTimeout(this.hTimer);
+            this.hTimer = null;
+        }
 
         // If already showing same tag, just update pinned status if needed
         if (this.isVisible && this.currentRootTag === rootTag) {
@@ -81,20 +85,10 @@ export class HierarchyBoard extends Component {
             }
             this.containerEl.style.display = 'block';
             this.boardEl.addClass('tgm-show');
-            // Cancel any pending hide
-            if (this.hTimer) {
-                window.clearTimeout(this.hTimer);
-                this.hTimer = null;
-            }
             return;
         }
 
-        // Cancel pending hide if switching to a new tag
-        if (this.hTimer) {
-            window.clearTimeout(this.hTimer);
-            this.hTimer = null;
-        }
-
+        // 如果正在显示不同的标签，立即切换（不等待延迟）
         this.currentRootTag = rootTag;
         this.isVisible = true;
         this.isPinned = pinned;
@@ -291,10 +285,52 @@ export class HierarchyBoard extends Component {
         const pillEl = contentWrapper.createDiv('tgm-hb-pill');
         pillEl.setText(node.name);
 
-        const color = this.plugin.settings.tagColors[node.fullName] || null;
-        if (color) {
-            pillEl.style.setProperty('--pill-color', color);
-            pillEl.addClass('colored');
+        // 应用颜色（如果启用且有颜色设置）
+        if (this.plugin.settings.enableCustomColors) {
+            const customColor = this.plugin.settings.tagColors[node.fullName] || null;
+            if (customColor) {
+                const isRainbowColor = customColor.startsWith('var(--color-');
+                if (isRainbowColor) {
+                    pillEl.addClass('tag-group-manager-rainbow-tag');
+                    pillEl.setAttribute('data-color', customColor);
+                } else {
+                    pillEl.addClass('tgm-custom-color-tag');
+                    
+                    // 对于自定义颜色，使用类似彩虹目录的渐变效果
+                    const hexToRgb = (hex: string) => {
+                        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                        return result ? {
+                            r: parseInt(result[1], 16),
+                            g: parseInt(result[2], 16),
+                            b: parseInt(result[3], 16)
+                        } : null;
+                    };
+
+                    const rgb = hexToRgb(customColor);
+                    if (rgb) {
+                        const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)`;
+                        const textColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.85)`;
+                        const borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+
+                        pillEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.06))`, 'important');
+                        pillEl.style.setProperty('color', textColor, 'important');
+                        pillEl.style.setProperty('border-color', borderColor, 'important');
+                    }
+                    
+                    pillEl.addClass('custom-colored-tag');
+                }
+            } else {
+                // 开启颜色映射但未设置特定颜色时，使用默认的彩虹风格渐变
+                const defaultRgb = { r: 148, g: 163, b: 184 };
+                const bgColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.08)`;
+                const textColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.85)`;
+                const borderColor = `rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.15)`;
+
+                pillEl.style.setProperty('background', `linear-gradient(145deg, ${bgColor}, rgba(${defaultRgb.r}, ${defaultRgb.g}, ${defaultRgb.b}, 0.06))`, 'important');
+                pillEl.style.setProperty('color', textColor, 'important');
+                pillEl.style.setProperty('border-color', borderColor, 'important');
+                pillEl.addClass('tgm-default-rainbow-tag');
+            }
         }
 
         pillEl.addEventListener('click', (e) => {

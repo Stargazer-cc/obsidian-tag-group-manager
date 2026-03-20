@@ -1139,6 +1139,26 @@
   background-color: var(--interactive-hover);
 }
 
+/* 批量设置组颜色按钮样式 */
+.tgm-set-group-color-btn {
+  padding: 6px 12px;
+  background-color: var(--interactive-normal);
+  color: var(--text-normal);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.2em;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tgm-set-group-color-btn:hover {
+  background-color: var(--interactive-hover);
+  transform: scale(1.1);
+}
+
 /* 彩虹目录风格的标签样式 */
 .tag-group-manager-rainbow-tag {
   --tag-bg-opacity: 0.08;
@@ -2163,7 +2183,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  width: 32px;
+  /* 从20px扩大到32px */
   height: 100%;
   position: absolute;
   right: 0;
@@ -2171,7 +2192,8 @@
   background: rgba(0, 0, 0, 0.1);
   /* Slight overlay */
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
+  /* 稍微增大字体 */
   font-weight: bold;
   cursor: pointer;
   border-radius: 0 6px 6px 0;
@@ -2243,12 +2265,12 @@
 
 .theme-dark .tgm-hierarchy-board {
   background: rgba(30, 30, 30, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.15);
 }
 
 .theme-light .tgm-hierarchy-board {
   background: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: 2px solid rgba(0, 0, 0, 0.12);
 }
 
 .tgm-hierarchy-board.tgm-show {
@@ -2298,17 +2320,27 @@
 /* Tree Structure */
 .tgm-hb-tree-container {
   flex: 1;
+  padding: 4px 0;
 }
 
 .tgm-hb-item {
-  margin-top: 4px;
+  margin-top: 2px;
   padding-left: 0;
+  position: relative;
 }
 
+/* 子节点容器 - 左侧垂直线（细腻的连接线） */
 .tgm-hb-children {
-  margin-left: 12px;
+  margin-left: 16px;
+  margin-top: 4px;
+  padding-left: 12px;
+  position: relative;
   border-left: 1px solid var(--background-modifier-border);
-  padding-left: 8px;
+}
+
+/* 悬停时垂直线变深 */
+.tgm-hb-item:hover > .tgm-hb-children {
+  border-left-color: var(--text-muted);
 }
 
 .tgm-hb-content-wrapper {
@@ -2316,41 +2348,99 @@
   align-items: center;
   position: relative;
   padding: 4px 0;
+  padding-left: 4px;
 }
 
-/* Horizontal connector - REMOVED for simplicity as per request */
+/* 水平连接线 - 从垂直线到圆点（细腻的连接线） */
 .tgm-hb-content-wrapper::before {
-  display: none;
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: var(--background-modifier-border);
+  transition: all 0.2s;
 }
 
-/* Hide connector for root items */
-.tgm-hb-tree-container>.tgm-hb-item>.tgm-hb-content-wrapper::before {
-  display: none;
+/* 悬停时水平线变深 */
+.tgm-hb-content-wrapper:hover::before {
+  background: var(--text-muted);
+}
+
+/* 圆点标记 */
+.tgm-hb-content-wrapper::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: all 0.2s;
+  z-index: 1;
+}
+
+/* 悬停时圆点变大变亮 */
+.tgm-hb-content-wrapper:hover::after {
+  width: 6px;
+  height: 6px;
+  background: var(--interactive-accent);
+  box-shadow: 0 0 4px var(--interactive-accent);
 }
 
 /* Node Pill */
 .tgm-hb-pill {
   display: inline-block;
-  padding: 4px 10px;
+  padding: 6px 12px;
   border-radius: 12px;
   background: var(--background-secondary-alt);
   color: var(--text-normal);
   font-size: 0.9em;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   border: 1px solid transparent;
   user-select: none;
   white-space: nowrap;
+  position: relative;
+}
+
+/* 根据深度调整 pill 的背景透明度 */
+.tgm-hb-item[data-depth="0"] > .tgm-hb-content-wrapper > .tgm-hb-pill {
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+.tgm-hb-item[data-depth="1"] > .tgm-hb-content-wrapper > .tgm-hb-pill {
+  opacity: 0.95;
+}
+
+.tgm-hb-item[data-depth="2"] > .tgm-hb-content-wrapper > .tgm-hb-pill {
+  opacity: 0.9;
+}
+
+.tgm-hb-item[data-depth="3"] > .tgm-hb-content-wrapper > .tgm-hb-pill {
+  opacity: 0.85;
 }
 
 .tgm-hb-pill:hover {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
-  transform: translateX(2px);
+  transform: translateX(4px) scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-color: var(--interactive-accent);
 }
 
+/* 有颜色的标签 - 左侧彩色边框 */
 .tgm-hb-pill.colored {
-  border-left-width: 3px;
+  border-left: 3px solid var(--pill-color, var(--interactive-accent));
+  padding-left: 10px;
+}
+
+.tgm-hb-pill.colored:hover {
+  border-left-width: 4px;
 }
 
 /* Auto-add Rules List in Settings */

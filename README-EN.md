@@ -25,7 +25,9 @@ For more detailed introduction, please visit [Obsidian Forum](https://forum.obsi
 - 🎯 **Floating Tag Selector** - Draggable, pinnable tag selection interface accessible via command palette or hotkeys, with auto-dimming for used tags
 - 📊 **Tag Overview View** - Right sidebar hub with sorting/insertion mode toggle, drag-and-drop reordering, and cross-group sorting
 - 🔌 **Universal Insertion Support** - Works in YAML areas, properties panel, Canvas, search boxes, and other plugin input fields
-- 🎨 **Custom Tag Colors** - Seven preset colors plus custom color picker, with single-tag and batch regex pattern matching
+- 🎨 **Custom Tag Colors** - Seven preset colors plus custom color picker, with single-tag and batch regex pattern matching, tag styles imitate Obsidian property tags
+- 🏷️ **Multi-level Tag Expansion** - Support 2-level and 3-level expansion modes, smart collection of all nodes, selective expansion and naming conflict prevention
+- 🔄 **Auto-add Tags** - Automatically add tags to corresponding tag groups based on rules, support auto-scan on startup
 - 🌍 **Multi-language Support** - Auto-detects Obsidian language settings for Chinese and English interfaces
 - 🧹 **Quick Clear Tags** - Right-click menu option to remove all tags from a note instantly
 
@@ -99,6 +101,85 @@ Notes:
 - **Refresh**: When new tags are added to a tag group, click any tag group name to refresh the current tag group's tags.
 
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/6.gif)
+
+### Multi-level Tag Expansion Feature
+
+#### Feature Overview
+The multi-level tag expansion feature can automatically expand multi-level tags (e.g., `frontend/framework/React`) in your vault into tag groups and sets, greatly simplifying multi-level tag management.
+
+#### Expansion Depth Selection
+
+**3-level Expansion (Default):**
+- Structure: `A/B/C/D/E` → Set=A, Group=B, Tags=C, C/D, C/D/E
+- Use case: When you need sets to organize many tag groups
+- Example:
+  ```
+  #frontend/framework/React/Hooks/useState
+  → Set "frontend"
+    → Group "framework"
+      → Tags "React", "React/Hooks", "React/Hooks/useState"
+  ```
+- Special handling: Two-level tags (e.g., `frontend/React`) create groups directly without sets
+
+**2-level Expansion:**
+- Structure: `A/B/C/D` → Group=A, Tags=B, B/C, B/C/D
+- Use case: When you have fewer tag categories and don't need sets
+- Example:
+  ```
+  #framework/React/Hooks/useState
+  → Group "framework"
+    → Tags "React", "React/Hooks", "React/Hooks/useState"
+  ```
+
+#### Selective Expansion
+- Enter tags to expand in the "Specify first-level tags to expand" input box
+- Separate multiple tags with commas, e.g., `frontend,backend,database`
+- Leave empty to expand all multi-level tags
+
+#### Smart Display Strategy
+- **Settings page**: Show all tags, allow color settings for all tags
+- **Selector/Overview**: Hide auto-expanded deep leaf nodes for clean interface
+- **Hover board**: Show complete tree structure with access to all nodes
+
+#### Naming Conflict Prevention
+- If set or group name already exists, auto-add number suffix (e.g., `frontend (1)`)
+- Support safe re-expansion without breaking existing configuration
+
+#### Respect User Actions
+- Manually added tags always visible
+- Manually deleted tags won't be re-added
+- Preserve user's tag order
+
+#### Usage Steps
+1. Open plugin settings page
+2. Find "Multi-level Tag Adaptation" section
+3. Select expansion depth (2-level or 3-level)
+4. (Optional) Enter first-level tags to expand
+5. Click "⚡ Expand Multi-level Tags" button
+6. View generated tag groups and sets
+
+### Auto-add Tags Feature
+
+#### Feature Overview
+Automatically add tags that match rules to corresponding tag groups.
+
+#### Usage
+1. Find "Auto-add Tags to Tag Groups" section in settings
+2. Enable "Auto-add tags" toggle
+3. Set rules in format: `tagname:groupname`, one rule per line
+4. Example rules:
+   ```
+   react:test-frontend-framework
+   vue:test-frontend-framework
+   python:test-backend-language
+   ```
+5. Click "Scan and Add" button, or enable "Auto-scan on startup"
+
+#### Smart Behavior
+- Auto-collect all tags matching rules, including depth>3 tags
+- Distinguish between auto-added and manually added tags
+- Respect user deletion, won't re-add deleted tags
+- Support repeated scanning, only add new tags
 
 
 
