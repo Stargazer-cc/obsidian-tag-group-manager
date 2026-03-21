@@ -26,8 +26,8 @@ For more detailed introduction, please visit [Obsidian Forum](https://forum.obsi
 - 📊 **Tag Overview View** - Right sidebar hub with sorting/insertion mode toggle, drag-and-drop reordering, and cross-group sorting
 - 🔌 **Universal Insertion Support** - Works in YAML areas, properties panel, Canvas, search boxes, and other plugin input fields
 - 🎨 **Custom Tag Colors** - Seven preset colors plus custom color picker, with single-tag and batch regex pattern matching, tag styles imitate Obsidian property tags
-- 🏷️ **Multi-level Tag Expansion** - Support 2-level and 3-level expansion modes, smart collection of all nodes, selective expansion and naming conflict prevention
-- 🔄 **Auto-add Tags** - Automatically add tags to corresponding tag groups based on rules, support auto-scan on startup
+- 🏷️ **Multi-Level Tag Adaptation** - Support 2-level and 3-level expand modes, smart matching auto-add, flexible rule-based configuration [📖 Detailed Guide](docs/Multi-Level-Tag-Adaptation-Guide.md)
+- 🔖 **Tag Renaming** - Vault-wide tag renaming with automatic updates across all notes and Canvas files
 - 🌍 **Multi-language Support** - Auto-detects Obsidian language settings for Chinese and English interfaces
 - 🧹 **Quick Clear Tags** - Right-click menu option to remove all tags from a note instantly
 
@@ -158,6 +158,32 @@ The multi-level tag expansion feature can automatically expand multi-level tags 
 5. Click "⚡ Expand Multi-level Tags" button
 6. View generated tag groups and sets
 
+### Tag Renaming Feature
+
+#### Feature Overview
+Rename tags across your entire vault, automatically updating all references in notes (including YAML frontmatter and content) and Canvas files.
+
+#### Usage
+1. Open command palette (Ctrl/Cmd + P)
+2. Search for "Rename Tag" command
+3. In the popup dialog:
+   - Enter old tag name (without # symbol)
+   - Enter new tag name (without # symbol)
+   - Choose whether to include Canvas files
+4. Click "Rename" button
+5. Wait for processing to complete and check notification message
+
+#### Features
+- **Comprehensive Coverage**: Automatically updates YAML frontmatter, inline tags, and Canvas files
+- **Hierarchy Support**: When renaming parent tags, automatically updates all child tags (e.g., `frontend`→`fe`, then `frontend/React`→`fe/React`)
+- **Sync Updates**: Automatically updates tag group configurations within the plugin
+- **Safe and Reliable**: Checks if tags exist before processing to avoid mistakes
+
+#### Notes
+- Rename operations cannot be undone; backup important data first
+- Large vaults may require longer processing time
+- Check tag group configurations after renaming to ensure correctness
+
 ### Auto-add Tags Feature
 
 #### Feature Overview
@@ -214,40 +240,21 @@ In the plugin settings page, you can:
 
 
 
-## Regular Expression Syntax Guide
+## Regular Expression Support
 
-In batch color settings, you can use regular expressions to match multiple tags. Here are some commonly used regex syntax:
+The plugin supports using regular expressions for batch tag matching and rule configuration. Regular expressions help you:
+- Batch match multiple similar tags
+- Flexibly define tag matching rules
+- Automate tag management workflows
 
-### Basic Syntax
+**Common Examples**:
+- `^work.*` - Match all tags starting with "work"
+- `.*note.*` - Match all tags containing "note"
+- `^(work|study|life)` - Match tags starting with these three words
+- `.*/.*` - Match all multi-level tags
 
-| Syntax | Description | Example | Match Result |
-|--------|-------------|---------|--------------|
-| `.` | Match any single character | `mov.` | move, movie, movi |
-| `*` | Match preceding character 0 or more times | `sci.*` | sci, science, sci-fi |
-| `+` | Match preceding character 1 or more times | `code+` | code, codee |
-| `?` | Match preceding character 0 or 1 time | `books?` | book, books |
-| `^` | Match start of string | `^movie` | movie (but not "old movie") |
-| `$` | Match end of string | `note$` | reading note (but not "notebook") |
-| `\|` | OR operator | `movie\|film` | movie OR film |
-| `[]` | Character set | `[mft]ove` | move, fove, tove |
-| `[^]` | Negated character set | `[^m]ove` | love, dove (but not "move") |
+📖 **Detailed Guide**: [Regular Expression Guide](docs/Regular-Expression-Guide.md)
 
-### Practical Examples
-
-| Need | Regular Expression | Description |
-|------|-------------------|-------------|
-| Match all tags starting with "work" | `^work.*` | e.g.: work, working, workspace |
-| Match all tags containing "note" | `.*note.*` | e.g.: notebook, notes, reading-note |
-| Match "movie" or "film" | `^(movie\|film)$` | Exact match for these two tags |
-| Match all numeric tags | `^\d+$` | e.g.: 2023, 001, 42 |
-| Match tags containing years | `.*20\d{2}.*` | e.g.: 2020, movie2023 |
-| Match nested tags | `.*\/.*` | e.g.: work/project, study/coding |
-| Match specific prefixes | `^(work\|study\|life)` | All tags starting with these words |
-
-### Notes
-
-1. **Escape Characters**: Some special characters need to be escaped with backslash `\`, such as `\.`, `\*`, `\+`, etc.
-2. **Case Sensitivity**: Regular expressions are case-sensitive by default
 
 ## Use Cases
 - Daily tag usage, wanting quick tag insertion
@@ -282,6 +289,12 @@ If you have any questions, suggestions, or feedback, please contact through:
 
 - Submit an Issue on GitHub
 - Send a message through the Obsidian forum
+
+## Acknowledgments
+
+The tag renaming feature in this plugin is inspired by and adapted from the [Tag Wrangler](https://github.com/pjeby/tag-wrangler) plugin. Thanks to @pjeby for their excellent work and open-source contribution.
+
+Tag Wrangler is licensed under the MIT License, which permits free use, modification, and distribution of the code under the terms of the license.
 
 ## License
 

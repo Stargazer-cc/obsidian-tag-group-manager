@@ -134,13 +134,13 @@
     "commandName": "全局重命名标签",
     "title": "重命名标签",
     "oldTagName": "旧标签名",
-    "oldTagNameDesc": "输入要替换的标签名 (不带 #)",
+    "oldTagNameDesc": "输入要替换的标签名（不带 #）",
     "newTagName": "新标签名",
-    "newTagNameDesc": "输入新的标签名 (不带 #)",
+    "newTagNameDesc": "输入新的标签名（不带 #）",
     "button": "重命名",
     "sectionTitle": "全局标签重命名",
     "includeCanvas": "包含 Canvas 文件",
-    "includeCanvasDesc": "同时替换 Canvas 画布中的文本卡片标签 (实验性功能)",
+    "includeCanvasDesc": "同时替换 Canvas 画布中的文本卡片标签（实验性功能）",
     "warning": "批量修改标签为高风险行为，慎重操作！"
   },
   "tagGroupSets": {
@@ -174,7 +174,17 @@
     "tagStyling": "文本内标签样式美化",
     "enableStyling": "开启样式美化",
     "enableStylingDesc": "读取颜色设置，应用到文中的标签样式。",
-    "useDataJsonColors": "使用颜色设置数据"
+    "useDataJsonColors": "使用颜色设置数据",
+    "smartMatch": {
+      "title": "多级标签智能匹配",
+      "desc": "配合多级标签展开功能使用,自动将新出现的多级标签添加到对应的标签组中(仅处理未被添加的标签)",
+      "enabled": "启用智能匹配",
+      "enabledDesc": "启用后,新出现的多级标签将自动按层级匹配到对应的标签组",
+      "currentMode": "当前匹配模式",
+      "modeNote": "匹配模式根据展开深度自动设置,找不到匹配的标签组时不会添加",
+      "createIfNotExists": "自动创建标签组",
+      "createIfNotExistsDesc": "如果匹配的标签组不存在，是否自动创建（暂未实现）"
+    }
   },
   "hierarchyBoard": {
     "title": "全层级看板",

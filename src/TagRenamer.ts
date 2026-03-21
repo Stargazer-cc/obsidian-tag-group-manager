@@ -1,3 +1,18 @@
+/**
+ * Tag Renaming Feature
+ * 
+ * This module provides vault-wide tag renaming functionality.
+ * 
+ * Acknowledgment:
+ * This implementation is inspired by and adapted from the Tag Wrangler plugin
+ * (https://github.com/pjeby/tag-wrangler) by @pjeby.
+ * 
+ * Tag Wrangler is licensed under the MIT License, which permits free use,
+ * modification, and distribution of the code under the terms of the license.
+ * 
+ * We are grateful for @pjeby's excellent work and open-source contribution.
+ */
+
 import { App, TFile, Notice, parseFrontMatterTags, CachedMetadata } from 'obsidian';
 import { i18n } from './i18n';
 import type TagGroupManagerPlugin from '../main';

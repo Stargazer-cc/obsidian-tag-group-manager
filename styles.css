@@ -2493,3 +2493,29 @@
   padding: 8px;
   text-align: center;
 }
+
+
+/* 多级标签图标样式 */
+.tgm-tag-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.tgm-tag-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 确保图标和文本在同一行 */
+.tgm-tag-text {
+  display: inline-flex;
+  align-items: center;
+}
+
+.nested-tag .tgm-tag-icon {
+  opacity: 0.9;
+}

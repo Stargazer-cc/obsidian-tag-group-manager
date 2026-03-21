@@ -4,6 +4,7 @@ import { i18n } from './src/i18n';
 import { getAllTags } from "obsidian";
 import { TagRenamer } from './src/TagRenamer';
 import { HierarchyBoard } from './src/HierarchyBoard';
+import changelogsData from './changelogs.json';
 
 
 // Helper function to insert tag into an input element
@@ -70,6 +71,12 @@ interface TagGroupManagerSettings {
 	autoExpandMultiLevelTags: boolean;
 	autoAddTags: boolean;
 	autoAddRules: string;
+	// 多级标签自动添加配置
+	multiLevelAutoAdd: {
+		enabled: boolean;              // 启用多级标签智能匹配
+		matchMode: 'level1' | 'level2'; // 匹配模式：level1(2级展开) 或 level2(3级展开)
+		createIfNotExists: boolean;    // 如果不存在是否自动创建标签组
+	};
 	enableTextTagStyling: boolean;
 	expandTagPrefixes: string;           // 新增：指定要展开的第一级标签（逗号分隔）
 	expandDepth: number;                 // 新增：展开深度（2或3）
@@ -87,6 +94,11 @@ const DEFAULT_SETTINGS: TagGroupManagerSettings = {
 	autoExpandMultiLevelTags: false,
 	autoAddTags: false,
 	autoAddRules: '',
+	multiLevelAutoAdd: {
+		enabled: true,
+		matchMode: 'level2', // 默认3级展开
+		createIfNotExists: false
+	},
 	enableTextTagStyling: false,
 	expandTagPrefixes: '',
 	expandDepth: 3
@@ -273,6 +285,30 @@ export default class TagGroupManagerPlugin extends Plugin {
 		// Apply text tag styling if enabled
 		this.applyTextTagStyling();
 
+		// 监听视图模式切换（Live Preview <-> Reading View）
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => {
+				// 当布局改变时（包括模式切换），重新处理标签
+				if (this.settings.enableTextTagStyling) {
+					// 延迟一小段时间，确保DOM已经更新
+					setTimeout(() => {
+						this.processExistingTags();
+					}, 100);
+				}
+			})
+		);
+
+		// 监听活动叶子变化（切换文件时）
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', () => {
+				if (this.settings.enableTextTagStyling) {
+					setTimeout(() => {
+						this.processExistingTags();
+					}, 100);
+				}
+			})
+		);
+
 		// Auto-run scanner on startup if enabled
 		if (this.settings.autoAddTags) {
 			// Run after a short delay to ensure cache is ready
@@ -337,160 +373,20 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 	// 获取指定版本的更新日志
 	private getChangelog(version: string): string | null {
-		const changelogs: Record<string, string> = {
-			'1.6.0': `
+		// 从导入的JSON文件获取changelog数据
+		const versionData = changelogsData[version as keyof typeof changelogsData];
+		if (!versionData) return null;
 
-### ✨ 核心功能增强
+		// 根据当前语言返回对应的changelog
+		const locale = i18n.getLocale();
+		const changelogArray = locale === 'zh' ? versionData.zh : versionData.en;
 
-#### 🏷️ 多级标签展开功能全面升级
-- **灵活的展开深度选择**：支持2级和3级展开模式，适应不同的标签组织需求
-  - **3级展开**：\`A/B/C/D\` → 组集=A，标签组=B，标签=C、C/D
-  - **2级展开**：\`A/B/C/D\` → 标签组=A，标签=B、B/C、B/C/D
-- **选择性展开**：支持指定第一级标签过滤，只展开需要的标签分类
-- **智能节点收录**：自动收录所有末节点（叶子节点），包括深度>3的标签
-- **两级标签特殊处理**：在3级展开模式下，两级标签（如\`前端/React\`）直接生成标签组，不创建组集
-- **防命名冲突**：自动为重复的组集名和标签组名添加序号，支持安全的重复展开
-- **智能显示策略**：
-  - 设置页面：显示所有标签，可为所有标签设置颜色
-  - 标签选择器/总览：隐藏自动展开的深层叶子节点，保持界面简洁
-  - 悬浮看板：显示完整树形结构，支持访问所有节点
-- **尊重用户操作**：手动添加的标签始终显示，手动删除的标签不会被重新添加
+		// 如果是数组，用换行符连接；否则直接返回字符串
+		const changelog = Array.isArray(changelogArray) 
+			? changelogArray.join('\n') 
+			: changelogArray;
 
-#### 🎨 标签颜色样式全面升级
-- **模仿属性标签样式**：正文标签样式完全模仿Obsidian笔记属性中的标签样式
-  - 胶囊状外观（13px圆角）
-  - 20%透明度背景色
-  - 深色文字（原色的65%亮度）
-  - 无边框设计
-  - 更宽松的内边距（左右8px）
-- **Live Preview支持**：标签颜色现在在编辑模式（Live Preview）中也能正常显示
-  - 使用MutationObserver动态监听DOM变化
-  - 自动为有颜色配置的标签添加样式
-  - 与阅读模式保持完全一致的视觉效果
-
-#### 🔄 自动添加标签功能优化
-- **完整节点收录**：修复了深度>3的叶子节点被遗漏的问题
-- **标记支持**：新增autoExpandedTags字段，区分自动添加和手动添加的标签
-- **尊重删除操作**：用户手动删除的标签不会被重新添加
-- **智能扫描**：支持启动时自动扫描，将符合规则的标签添加到对应标签组
-
-### 🚀 体验优化
-- **悬浮面板触发区域扩大**：hierarchy trigger按钮宽度从20px增加到32px，更易触发
-- **多级标签图标更换**：使用⚡图标代替📁，更加醒目
-- **展开配置UI集中**：将展开相关的所有设置集中到一个带边框的容器中
-- **输入框宽度优化**：设置为100%宽度，确保可以正常输入
-
-### 🐛 问题修复
-- 修复了输入框无法输入的问题
-- 修复了深度>3的标签在展开时被遗漏的问题
-- 修复了重复展开会影响已编辑标签组的问题
-- 修复了Live Preview模式下标签颜色不显示的问题
-
-### 📚 文档更新
-- 新增详细的多级标签展开逻辑说明文档
-- 新增自动添加标签功能测试报告
-- 新增Live Preview标签颜色功能测试报告
-- 更新README，添加展开功能详细说明
-
-### 🔧 技术改进
-- 新增\`autoExpandedTags\`字段用于标记自动添加的标签
-- 新增\`expandTagPrefixes\`和\`expandDepth\`设置字段
-- 新增\`livePreviewObserver\`用于监听DOM变化
-- 优化了标签显示过滤逻辑
-- 完善了向后兼容性，旧数据无缝升级
-
----
-
-### ✨ Core Features
-
-#### 🏷️ Multi-level Tag Expansion Fully Upgraded
-- **Flexible Expansion Depth**: Support 2-level and 3-level expansion modes
-  - **3-level**: \`A/B/C/D\` → Set=A, Group=B, Tags=C, C/D
-  - **2级展开**: \`A/B/C/D\` → Group=A, Tags=B, B/C, B/C/D
-- **Selective Expansion**: Filter by first-level tags to expand only needed categories
-- **Smart Node Collection**: Auto-collect all leaf nodes, including depth>3 tags
-- **Two-level Tag Handling**: In 3-level mode, two-level tags (e.g., \`frontend/React\`) create groups directly without sets
-- **Naming Conflict Prevention**: Auto-add numbers to duplicate set/group names for safe re-expansion
-- **Smart Display Strategy**:
-  - Settings page: Show all tags, allow color settings for all
-  - Selector/Overview: Hide auto-expanded deep leaf nodes for clean interface
-  - Hover board: Show complete tree structure with access to all nodes
-- **Respect User Actions**: Manually added tags always visible, manually deleted tags won't be re-added
-
-#### 🎨 Tag Color Styles Fully Upgraded
-- **Property Tag Style Imitation**: Text tags now fully imitate Obsidian property tag styles
-  - Pill-shaped appearance (13px border-radius)
-  - 20% transparency background
-  - Dark text color (65% brightness of original)
-  - Borderless design
-  - More generous padding (8px left/right)
-- **Live Preview Support**: Tag colors now display correctly in editing mode (Live Preview)
-  - Uses MutationObserver to dynamically monitor DOM changes
-  - Auto-applies styles to tags with configured colors
-  - Maintains complete visual consistency with reading mode
-
-#### 🔄 Auto-add Tags Feature Optimized
-- **Complete Node Collection**: Fixed issue where depth>3 leaf nodes were missed
-- **Marking Support**: New autoExpandedTags field to distinguish auto-added from manual tags
-- **Respect Deletion**: User-deleted tags won't be re-added
-- **Smart Scanning**: Support auto-scan on startup to add matching tags to groups
-
-### 🚀 Experience Improvements
-- **Expanded Hover Panel Trigger Area**: Hierarchy trigger button width increased from 20px to 32px
-- **Multi-level Tag Icon Changed**: Using ⚡ icon instead of 📁 for better visibility
-- **Centralized Expansion Config UI**: All expansion settings grouped in bordered container
-- **Input Width Optimized**: Set to 100% width to ensure proper input
-
-### 🐛 Bug Fixes
-- Fixed input box unable to type issue
-- Fixed depth>3 tags being missed during expansion
-- Fixed repeated expansion affecting edited tag groups
-- Fixed tag colors not displaying in Live Preview mode
-
-### 📚 Documentation Updates
-- Added detailed multi-level tag expansion logic documentation
-- Added auto-add tags feature test report
-- Added Live Preview tag color feature test report
-- Updated README with detailed expansion feature explanation
-
-### 🔧 Technical Improvements
-- Added \`autoExpandedTags\` field to mark auto-added tags
-- Added \`expandTagPrefixes\` and \`expandDepth\` settings fields
-- Added \`livePreviewObserver\` for DOM change monitoring
-- Optimized tag display filtering logic
-- Improved backward compatibility for seamless old data upgrade
-`,
-			'1.5.12': `
-
-### ✨ 核心功能增强
-- **新增标签组集管理功能**：现在你可以把任意标签组添加到一个“集”中，以应对不同的工作环境。支持在组集内独立排序标签组。不同集的展示和切换均可在右侧功能栏中实现，图标可自定义。
-- **支持实时预览属性插入**：终于不需要切换到源代码模式就能编辑标签了！现在支持直接点击插入到笔记属性（Properties/YAML）区域。
-- **增加 Canvas 支持**：现在可以直接将标签插入到 Canvas 画布中的卡片和内嵌文档里。
-
-### 🚀 体验优化
-- **重构标签颜色设置**：
-    - **交互优化**：独立设置区域，支持普通字符串匹配和正则表达式匹配。支持左键单击进行详细设置（预设/自定义，自动储存7个）。
-    - **样式标准化**：开启后全体标签应用柔和渐变背景样式，统一了彩虹标签、自定义颜色标签在不同模式下的视觉表现。
-- **YAML 连续插入修复**：修复了在源码模式下，连续插入标签会导致光标跳出的问题。
-- **UI & 交互细节**：设置页面“使用说明”显示优化；浮动标签选择器位置及拖动体验丝滑优化。
-
----
-
-
-### ✨ Core Features
-- **Tag Group Sets**: Manage tag groups in "Sets" for different workflows. Support independent sorting and quick switching via the sidebar menu with custom icons.
-- **Live Preview Properties**: No need to switch source mode anymore! Insert tags directly into the Properties (YAML) section in Live Preview.
-- **Canvas Support**: Fully supported inserting tags into cards and notes within Obsidian Canvas.
-
-### 🚀 Improvements
-- **Refactored Color Settings**:
-    - **Interaction**: Independent settings area supporting string/regex matching. Left-click for detailed settings (presets/custom, history of 7).
-    - **Standardized Styles**: Unified visual styles for rainbow and custom tags with soft gradient backgrounds.
-- **YAML Cursor Fix**: Fixed cursor jumping issue during continuous insertion in YAML frontmatter.
-- **UX Details**: Improved "Usage Tips" display; Smoother positioning and dragging for the Floating Tag Selector.`
-		};
-
-		return changelogs[version] || null;
+		return changelog || null;
 	}
 
 	// 清除笔记中的所有标签
@@ -591,6 +487,15 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		
+		// 根据展开深度自动设置智能匹配模式
+		if (this.settings.expandDepth === 2) {
+			// 2级展开: 按第一级匹配
+			this.settings.multiLevelAutoAdd.matchMode = 'level1';
+		} else if (this.settings.expandDepth === 3) {
+			// 3级展开: 按第二级匹配
+			this.settings.multiLevelAutoAdd.matchMode = 'level2';
+		}
 	}
 
 	async saveSettings() {
@@ -884,7 +789,11 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 	async autoScanTagsToGroups(): Promise<number> {
 		const rules = this.settings.autoAddRules.split(';').filter(r => r.trim().length > 0);
-		if (rules.length === 0) return 0;
+		
+		// 如果既没有规则也没有启用智能匹配,直接返回
+		if (rules.length === 0 && !this.settings.multiLevelAutoAdd.enabled) {
+			return 0;
+		}
 
 		const allFiles = this.app.vault.getMarkdownFiles();
 		const allTags = new Set<string>(); // All unique tags in vault
@@ -902,7 +811,59 @@ export default class TagGroupManagerPlugin extends Plugin {
 		const groupsToUpdate = new Map<string, Set<string>>();
 
 		for (const tag of allTags) {
-			for (const rule of rules) {
+			let alreadyMatched = false; // 标记标签是否已经被智能匹配处理
+			
+			// 检查标签是否已经在任何标签组中
+			const isTagInAnyGroup = this.settings.tagGroups.some(g => g.tags.includes(tag));
+			
+			// 多级标签智能匹配逻辑 - 只处理未被添加的标签
+			const tagParts = tag.split('/');
+			const isMultiLevel = tagParts.length >= 2;
+			
+			if (isMultiLevel && this.settings.multiLevelAutoAdd.enabled && !isTagInAnyGroup) {
+				let matchedGroup: string | null = null;
+				
+				// 根据匹配模式进行匹配(二选一,找不到就不添加)
+				if (this.settings.multiLevelAutoAdd.matchMode === 'level1') {
+					// level1模式: 只按第一级匹配(适配2级展开)
+					const level1 = tagParts[0];
+					const group = this.settings.tagGroups.find(g => g.name === level1);
+					if (group) {
+						matchedGroup = group.name;
+					}
+				} else if (this.settings.multiLevelAutoAdd.matchMode === 'level2' && tagParts.length >= 2) {
+					// level2模式: 只按第二级匹配(适配3级展开)
+					const level2 = tagParts[1];
+					const group = this.settings.tagGroups.find(g => g.name === level2);
+					if (group) {
+						matchedGroup = group.name;
+					}
+				}
+				
+				// 如果找到匹配的组，添加标签
+				if (matchedGroup) {
+					if (!groupsToUpdate.has(matchedGroup)) {
+						groupsToUpdate.set(matchedGroup, new Set());
+					}
+					
+					// 对于多级标签，添加所有层级节点（从第三级开始，或从第二级开始如果只有两级）
+					if (tagParts.length >= 3) {
+						for (let i = 2; i < tagParts.length; i++) {
+							const tagToAdd = tagParts.slice(0, i + 1).join('/');
+							groupsToUpdate.get(matchedGroup)!.add(tagToAdd);
+						}
+					} else {
+						// 只有两级的标签，直接添加完整标签
+						groupsToUpdate.get(matchedGroup)!.add(tag);
+					}
+					
+					alreadyMatched = true; // 标记为已匹配，跳过规则匹配
+				}
+			}
+			
+			// 规则匹配逻辑（原有逻辑）- 只有在智能匹配未处理时才执行
+			if (!alreadyMatched) {
+				for (const rule of rules) {
 				// 改进的规则解析：使用indexOf避免冒号在pattern或groupName中的问题
 				const colonIndex = rule.indexOf(':');
 				if (colonIndex === -1) continue;
@@ -936,6 +897,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 					}
 				}
 			}
+			} // 结束 if (!alreadyMatched) 块
 		}
 
 		let addedCount = 0;
@@ -1584,11 +1546,14 @@ class TagSelectorModal {
 			const isMultiLevelTag = tag.includes('/');
 			
 			if (isMultiLevelTag) {
+				// 添加lucide tags图标
+				const iconEl = tagTextEl.createSpan('tgm-tag-icon');
+				setIcon(iconEl, 'tags');
 				// Show shortened name (leaf)
-				displayText = `⚡ ${tag.split('/').pop()}`;
+				displayText = ` ${tag.split('/').pop()}`;
 				tagTextEl.addClass('nested-tag');
 			}
-			tagTextEl.setText(displayText);
+			tagTextEl.appendText(displayText);
 
 			// Add Hierarchy Board Trigger (Tag Selector) - 仅用于多级标签
 			if (isMultiLevelTag && this.plugin) {
@@ -2232,11 +2197,11 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		// ==================== 组集管理区域 ====================
 		this.renderTagGroupSetSettings(containerEl);
 
-		// ==================== 标签组管理区域 ====================
-		this.renderTagGroupSettings(containerEl);
-
 		// ==================== 全局标签重命名区域 ====================
 		this.renderRenameSettings(containerEl);
+
+		// ==================== 标签组管理区域 ====================
+		this.renderTagGroupSettings(containerEl);
 	}
 
 
@@ -2264,7 +2229,15 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.expandDepth.toString())
 				.onChange(async (value) => {
 					this.plugin.settings.expandDepth = parseInt(value);
+					// 根据展开深度自动设置智能匹配模式
+					if (parseInt(value) === 2) {
+						this.plugin.settings.multiLevelAutoAdd.matchMode = 'level1';
+					} else {
+						this.plugin.settings.multiLevelAutoAdd.matchMode = 'level2';
+					}
 					await this.plugin.saveSettings();
+					// 刷新设置页面以更新智能匹配区域的显示
+					this.display();
 				}));
 
 		// 指定展开的第一级标签
@@ -2295,42 +2268,77 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		// 2.3 Auto Add Rules
 		const autoAddSection = section.createDiv('tgm-auto-add-section');
+		autoAddSection.style.border = '1px solid var(--background-modifier-border)';
+		autoAddSection.style.borderRadius = '6px';
+		autoAddSection.style.padding = '16px';
+		autoAddSection.style.marginBottom = '20px';
+		autoAddSection.style.backgroundColor = 'var(--background-secondary)';
+		
 		new Setting(autoAddSection)
-			.setName(i18n.t('multiLevelAdaptation.autoAddTags') || '自动添加标签至标签组功能设置')
-			.setDesc(i18n.t('multiLevelAdaptation.autoAddTagsDesc') || '根据关键字或者正则表达式，扫描未被划分到标签组的标签，自动将相关标签添加至目标标签组。')
+			.setName(i18n.t('multiLevelAdaptation.autoAddTags') || '自动添加标签至标签组')
+			.setDesc(i18n.t('multiLevelAdaptation.autoAddTagsDesc') || '根据关键字或正则表达式,扫描未被划分到标签组的标签,自动将相关标签添加至目标标签组')
 			.setHeading();
 
 		// Rules List
 		const rulesList = autoAddSection.createDiv('tgm-rules-list');
+		rulesList.style.marginBottom = '12px';
+		
 		const updateRulesList = () => {
 			rulesList.empty();
 			const rules = this.plugin.settings.autoAddRules.split(';').filter(r => r.trim().length > 0);
-			rules.forEach(rule => {
-				const ruleEl = rulesList.createDiv('tgm-rule-item');
-				const [pattern, group] = rule.split(':');
-				ruleEl.createSpan({ text: `${pattern} -> ${group}`, cls: 'tgm-rule-text' });
-				const deleteBtn = ruleEl.createEl('button', { text: '✕', cls: 'tgm-rule-delete' });
-				deleteBtn.onclick = async () => {
-					const newRules = rules.filter(r => r !== rule).join(';');
-					this.plugin.settings.autoAddRules = newRules;
-					await this.plugin.saveSettings();
-					updateRulesList();
-				};
-			});
+			
+			if (rules.length > 0) {
+				rules.forEach(rule => {
+					const ruleEl = rulesList.createDiv('tgm-rule-item');
+					ruleEl.style.display = 'flex';
+					ruleEl.style.alignItems = 'center';
+					ruleEl.style.justifyContent = 'space-between';
+					ruleEl.style.padding = '6px 10px';
+					ruleEl.style.marginBottom = '6px';
+					ruleEl.style.backgroundColor = 'var(--background-primary)';
+					ruleEl.style.borderRadius = '4px';
+					ruleEl.style.border = '1px solid var(--background-modifier-border)';
+					
+					const [pattern, group] = rule.split(':');
+					const textSpan = ruleEl.createSpan({ text: `${pattern} → ${group}` });
+					textSpan.style.flex = '1';
+					textSpan.style.fontSize = '0.9em';
+					
+					const deleteBtn = ruleEl.createEl('button', { text: '×' });
+					deleteBtn.style.padding = '2px 8px';
+					deleteBtn.style.cursor = 'pointer';
+					deleteBtn.style.border = 'none';
+					deleteBtn.style.background = 'transparent';
+					deleteBtn.style.color = 'var(--text-muted)';
+					deleteBtn.style.fontSize = '1.2em';
+					deleteBtn.onmouseenter = () => deleteBtn.style.color = 'var(--text-error)';
+					deleteBtn.onmouseleave = () => deleteBtn.style.color = 'var(--text-muted)';
+					deleteBtn.onclick = async () => {
+						const newRules = rules.filter(r => r !== rule).join(';');
+						this.plugin.settings.autoAddRules = newRules;
+						await this.plugin.saveSettings();
+						updateRulesList();
+					};
+				});
+			}
 		};
 		updateRulesList();
 
-		// Add Rule UI - Separate Inputs as requested
+		// Add Rule UI - Compact layout
 		const addRuleContainer = autoAddSection.createDiv('tgm-add-rule-container');
-		addRuleContainer.style.display = 'flex';
-		addRuleContainer.style.gap = '10px';
-		addRuleContainer.style.marginBottom = '10px';
+		addRuleContainer.style.display = 'grid';
+		addRuleContainer.style.gridTemplateColumns = '1fr 1fr auto';
+		addRuleContainer.style.gap = '8px';
+		addRuleContainer.style.marginBottom = '16px';
+		addRuleContainer.style.alignItems = 'center';
 
 		const patternInput = addRuleContainer.createEl('input', {
 			type: 'text',
-			placeholder: i18n.t('multiLevelAdaptation.rulePlaceholder') || '关键字或正则表达式',
-			cls: 'tgm-rule-input'
+			placeholder: i18n.t('multiLevelAdaptation.rulePlaceholder') || '关键字或正则表达式'
 		});
+		patternInput.style.width = '100%';
+		patternInput.style.padding = '6px 10px';
+		
 		// Add Datalist for suggestions
 		const dataListId = 'tgm-group-suggestions';
 		const dataList = addRuleContainer.createEl('datalist', { attr: { id: dataListId } });
@@ -2340,13 +2348,17 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		const groupInput = addRuleContainer.createEl('input', {
 			type: 'text',
-			placeholder: i18n.t('multiLevelAdaptation.targetGroupPlaceholder') || '目标标签组名称',
-			cls: 'tgm-rule-group-input'
+			placeholder: i18n.t('multiLevelAdaptation.targetGroupPlaceholder') || '目标标签组名称'
 		});
 		groupInput.setAttribute('list', dataListId);
+		groupInput.style.width = '100%';
+		groupInput.style.padding = '6px 10px';
+		
 		const addRuleBtn = addRuleContainer.createEl('button', {
 			text: i18n.t('multiLevelAdaptation.addRule') || '添加规则'
 		});
+		addRuleBtn.style.padding = '6px 16px';
+		addRuleBtn.style.whiteSpace = 'nowrap';
 
 		addRuleBtn.onclick = async () => {
 			const p = patternInput.value.trim();
@@ -2365,9 +2377,18 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 			}
 		};
 
-		// Run Now Button
-		new Setting(autoAddSection)
-			.setName(i18n.t('multiLevelAdaptation.runAutoAdd') || '手动刷新')
+		// Bottom controls in one row
+		const controlsContainer = autoAddSection.createDiv();
+		controlsContainer.style.display = 'flex';
+		controlsContainer.style.gap = '20px';
+		controlsContainer.style.alignItems = 'center';
+		controlsContainer.style.justifyContent = 'space-between';
+		controlsContainer.style.paddingTop = '12px';
+		controlsContainer.style.marginTop = '12px';
+		controlsContainer.style.borderTop = '1px solid var(--background-modifier-border)';
+		
+		// Run Now Button (no label, just button)
+		const runNowSetting = new Setting(controlsContainer)
 			.addButton(btn => btn
 				.setButtonText(i18n.t('multiLevelAdaptation.runAutoAdd') || '立即刷新')
 				.onClick(async () => {
@@ -2375,16 +2396,101 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					new Notice(i18n.t('messages.scanComplete').replace('{count}', count.toString()));
 					this.display();
 				}));
+		runNowSetting.settingEl.style.border = 'none';
+		runNowSetting.settingEl.style.padding = '0';
+		runNowSetting.settingEl.style.justifyContent = 'flex-start';
 
-		// Auto run on startup
-		new Setting(autoAddSection)
+		// Auto run on startup toggle
+		const autoRunSetting = new Setting(controlsContainer)
 			.setName(i18n.t('multiLevelAdaptation.autoAddOnStartup') || '启动时自动运行')
 			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.autoAddTags) // reusing autoAddTags boolean for "Run on Startup" toggle effectively
+				.setValue(this.plugin.settings.autoAddTags)
 				.onChange(async (value) => {
 					this.plugin.settings.autoAddTags = value;
 					await this.plugin.saveSettings();
 				}));
+		autoRunSetting.settingEl.style.border = 'none';
+		autoRunSetting.settingEl.style.padding = '0';
+
+		// 多级标签智能匹配配置
+		const smartMatchSection = section.createDiv('tgm-smart-match-section');
+		smartMatchSection.style.border = '1px solid var(--background-modifier-border)';
+		smartMatchSection.style.borderRadius = '6px';
+		smartMatchSection.style.padding = '16px';
+		smartMatchSection.style.marginTop = '20px';
+		smartMatchSection.style.backgroundColor = 'var(--background-secondary)';
+
+		new Setting(smartMatchSection)
+			.setName(i18n.t('multiLevelAdaptation.smartMatch.title') || '多级标签智能匹配')
+			.setDesc(i18n.t('multiLevelAdaptation.smartMatch.desc') || '配合多级标签展开功能使用,自动将新出现的多级标签添加到对应的标签组中(仅处理未被添加的标签)')
+			.setHeading();
+
+		// 启用智能匹配
+		new Setting(smartMatchSection)
+			.setName(i18n.t('multiLevelAdaptation.smartMatch.enabled') || '启用智能匹配')
+			.setDesc(i18n.t('multiLevelAdaptation.smartMatch.enabledDesc') || '启用后,新出现的多级标签将自动按层级匹配到对应的标签组')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.multiLevelAutoAdd.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.multiLevelAutoAdd.enabled = value;
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		if (this.plugin.settings.multiLevelAutoAdd.enabled) {
+			// 当前匹配模式显示
+			const modeContainer = smartMatchSection.createDiv('tgm-mode-container');
+			modeContainer.style.marginTop = '10px';
+			modeContainer.style.padding = '12px';
+			modeContainer.style.backgroundColor = 'var(--background-primary)';
+			modeContainer.style.borderRadius = '4px';
+			modeContainer.style.border = '1px solid var(--background-modifier-border)';
+			
+			const currentMode = this.plugin.settings.multiLevelAutoAdd.matchMode;
+			const expandDepth = this.plugin.settings.expandDepth;
+			
+			const modeTitle = modeContainer.createEl('div', { 
+				text: i18n.t('multiLevelAdaptation.smartMatch.currentMode') || '当前匹配模式',
+				cls: 'setting-item-name'
+			});
+			modeTitle.style.fontWeight = '600';
+			modeTitle.style.marginBottom = '8px';
+			
+			const modeDesc = modeContainer.createEl('div');
+			modeDesc.style.fontSize = '0.9em';
+			modeDesc.style.color = 'var(--text-muted)';
+			
+			if (currentMode === 'level1') {
+				modeDesc.innerHTML = `
+					<div style="margin-bottom: 4px;">✓ <strong>level1模式</strong> - 按第一级匹配(适配${expandDepth}级展开)</div>
+					<div style="margin-left: 16px; color: var(--text-faint);">示例: #前端/框架/React → 匹配"前端"组</div>
+				`;
+			} else {
+				modeDesc.innerHTML = `
+					<div style="margin-bottom: 4px;">✓ <strong>level2模式</strong> - 按第二级匹配(适配${expandDepth}级展开)</div>
+					<div style="margin-left: 16px; color: var(--text-faint);">示例: #前端/框架/React → 匹配"框架"组</div>
+				`;
+			}
+			
+			const modeNote = modeContainer.createEl('div');
+			modeNote.style.marginTop = '8px';
+			modeNote.style.fontSize = '0.85em';
+			modeNote.style.color = 'var(--text-muted)';
+			modeNote.style.fontStyle = 'italic';
+			modeNote.textContent = i18n.t('multiLevelAdaptation.smartMatch.modeNote') || '匹配模式根据展开深度自动设置,找不到匹配的标签组时不会添加';
+
+			// 自动创建标签组选项
+			new Setting(smartMatchSection)
+				.setName(i18n.t('multiLevelAdaptation.smartMatch.createIfNotExists') || '自动创建标签组')
+				.setDesc(i18n.t('multiLevelAdaptation.smartMatch.createIfNotExistsDesc') || '如果匹配的标签组不存在，是否自动创建（暂未实现）')
+				.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.multiLevelAutoAdd.createIfNotExists)
+					.setDisabled(true) // 暂时禁用，未来版本实现
+					.onChange(async (value) => {
+						this.plugin.settings.multiLevelAutoAdd.createIfNotExists = value;
+						await this.plugin.saveSettings();
+					}));
+		}
 
 	}
 
@@ -2515,14 +2621,53 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 	// 渲染全局标签重命名设置区域
 	renderRenameSettings(containerEl: HTMLElement): void {
 		const renameSection = containerEl.createDiv('settings-section');
-		new Setting(renameSection).setName(i18n.t('rename.sectionTitle')).setHeading();
-		renameSection.createEl('p', { text: i18n.t('rename.warning'), cls: 'tgm-warning-text' });
+		renameSection.style.padding = '20px';
+		renameSection.style.marginBottom = '20px';
+		
+		// 标题
+		new Setting(renameSection)
+			.setName(i18n.t('rename.sectionTitle'))
+			.setHeading();
+
+		// 警告提示 - 更紧凑的样式
+		const warningText = i18n.t('rename.warning');
+		
+		const warningEl = renameSection.createDiv('tgm-rename-warning');
+		warningEl.style.padding = '8px 12px';
+		warningEl.style.marginBottom = '16px';
+		warningEl.style.backgroundColor = 'rgba(255, 100, 100, 0.15)';
+		warningEl.style.border = '1px solid rgba(255, 100, 100, 0.3)';
+		warningEl.style.borderRadius = '6px';
+		warningEl.style.fontSize = '0.9em';
+		warningEl.style.color = 'var(--text-normal)';
+		warningEl.style.display = 'flex';
+		warningEl.style.alignItems = 'center';
+		warningEl.style.gap = '8px';
+		
+		const iconSpan = warningEl.createSpan();
+		iconSpan.setText('⚠️');
+		iconSpan.style.fontSize = '1.2em';
+		
+		const textSpan = warningEl.createSpan();
+		textSpan.setText(warningText);
+		textSpan.style.flex = '1';
 
 		let oldTag = '';
 		let newTag = '';
 		let includeCanvas = false;
 
-		new Setting(renameSection)
+		// 输入区域容器 - 使用flex布局使其更紧凑
+		const inputContainer = renameSection.createDiv('tgm-rename-inputs');
+		inputContainer.style.display = 'flex';
+		inputContainer.style.gap = '12px';
+		inputContainer.style.marginBottom = '12px';
+		inputContainer.style.flexWrap = 'wrap';
+
+		// 旧标签名输入
+		const oldTagContainer = inputContainer.createDiv();
+		oldTagContainer.style.flex = '1';
+		oldTagContainer.style.minWidth = '200px';
+		new Setting(oldTagContainer)
 			.setName(i18n.t('rename.oldTagName'))
 			.setDesc(i18n.t('rename.oldTagNameDesc'))
 			.addText(text => text
@@ -2531,7 +2676,11 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					oldTag = value;
 				}));
 
-		new Setting(renameSection)
+		// 新标签名输入
+		const newTagContainer = inputContainer.createDiv();
+		newTagContainer.style.flex = '1';
+		newTagContainer.style.minWidth = '200px';
+		new Setting(newTagContainer)
 			.setName(i18n.t('rename.newTagName'))
 			.setDesc(i18n.t('rename.newTagNameDesc'))
 			.addText(text => text
@@ -2540,7 +2689,17 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					newTag = value;
 				}));
 
-		new Setting(renameSection)
+		// Canvas选项和按钮容器 - 放在同一行
+		const actionContainer = renameSection.createDiv('tgm-rename-actions');
+		actionContainer.style.display = 'flex';
+		actionContainer.style.alignItems = 'center';
+		actionContainer.style.gap = '16px';
+		actionContainer.style.marginTop = '12px';
+
+		// Canvas选项
+		const canvasToggleContainer = actionContainer.createDiv();
+		canvasToggleContainer.style.flex = '1';
+		new Setting(canvasToggleContainer)
 			.setName(i18n.t('rename.includeCanvas'))
 			.setDesc(i18n.t('rename.includeCanvasDesc'))
 			.addToggle(toggle => toggle
@@ -2549,7 +2708,9 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					includeCanvas = value;
 				}));
 
-		new Setting(renameSection)
+		// 重命名按钮
+		const buttonContainer = actionContainer.createDiv();
+		new Setting(buttonContainer)
 			.addButton(btn => btn
 				.setButtonText(i18n.t('rename.button'))
 				.setCta()
@@ -2720,11 +2881,14 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 				const isMultiLevelTag = tag.includes('/');
 				
 				if (isMultiLevelTag) {
-					displayText = `⚡ #${tag}`;
+					// 添加lucide tags图标
+					const iconEl = tagText.createSpan('tgm-tag-icon');
+					setIcon(iconEl, 'tags');
+					displayText = ` #${tag}`;
 					tagText.addClass('nested-tag');
 				}
 
-				tagText.setText(displayText);
+				tagText.appendText(displayText);
 
 				// 设置 Tooltip - 所有标签都显示 tooltip
 				// 在设置页面中，tooltip 可以帮助用户更清晰地看到完整路径
@@ -2901,11 +3065,14 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 								const isMultiLevelTag = tag.includes('/');
 								
 								if (isMultiLevelTag) {
-									displayText = `⚡ ${tag}`;
+									// 添加lucide tags图标
+									const iconEl = tagTextEl.createSpan('tgm-tag-icon');
+									setIcon(iconEl, 'tags');
+									displayText = ` ${tag}`;
 									tagTextEl.addClass('nested-tag');
 								}
 
-								tagTextEl.setText(displayText);
+								tagTextEl.appendText(displayText);
 
 								// 设置 Tooltip - 所有标签都显示 tooltip
 								tagEl.setAttribute('aria-label', tag);
@@ -3064,11 +3231,14 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 							const isMultiLevelTag = tag.includes('/');
 							
 							if (isMultiLevelTag) {
-								displayText = `⚡ ${tag}`;
+								// 添加lucide tags图标
+								const iconEl = tagTextEl.createSpan('tgm-tag-icon');
+								setIcon(iconEl, 'tags');
+								displayText = ` ${tag}`;
 								tagTextEl.addClass('nested-tag');
 							}
 
-							tagTextEl.setText(displayText);
+							tagTextEl.appendText(displayText);
 
 							// 设置 Tooltip - 所有标签都显示 tooltip
 							tagEl.setAttribute('aria-label', tag);
@@ -3529,12 +3699,15 @@ class TagGroupView extends ItemView {
 				const isMultiLevelTag = tag.includes('/');
 				
 				if (isMultiLevelTag) {
+					// 添加lucide tags图标
+					const iconEl = tagTextEl.createSpan('tgm-tag-icon');
+					setIcon(iconEl, 'tags');
 					// Show shortened name (leaf)
-					displayText = `⚡ ${tag.split('/').pop()}`;
+					displayText = ` ${tag.split('/').pop()}`;
 					tagTextEl.addClass('nested-tag');
 				}
 
-				tagTextEl.setText(displayText);
+				tagTextEl.appendText(displayText);
 
 				// Add Hierarchy Board Trigger - 仅用于多级标签
 				if (isMultiLevelTag) {

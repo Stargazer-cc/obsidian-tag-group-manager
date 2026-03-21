@@ -179,7 +179,17 @@
     "tagStyling": "Text Tag Styling",
     "enableStyling": "Enable Text Tag Styling",
     "enableStylingDesc": "Apply configured colors to tags in Editor and Preview modes.",
-    "useDataJsonColors": "Use configured colors"
+    "useDataJsonColors": "Use configured colors",
+    "smartMatch": {
+      "title": "Smart Multi-level Tag Matching",
+      "desc": "Works with auto-expand feature to automatically add new multi-level tags to corresponding tag groups (only processes unassigned tags)",
+      "enabled": "Enable Smart Matching",
+      "enabledDesc": "When enabled, new multi-level tags will be automatically matched to tag groups by hierarchy",
+      "currentMode": "Current Match Mode",
+      "modeNote": "Match mode is automatically set based on expand depth. Tags won't be added if no matching group is found",
+      "createIfNotExists": "Auto-create Tag Groups",
+      "createIfNotExistsDesc": "Whether to automatically create tag groups if they don't exist (not yet implemented)"
+    }
   },
   "hierarchyBoard": {
     "title": "Hierarchy Board",
