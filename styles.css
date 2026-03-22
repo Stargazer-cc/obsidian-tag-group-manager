@@ -1055,8 +1055,6 @@
 .settings-section {
   margin: 25px 0;
   padding: 20px;
-  padding-top: 6px;
-  padding-bottom: 20px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   background-color: var(--background-secondary);
@@ -1139,6 +1137,26 @@
 
 .tgm-delete-group-btn:hover {
   background-color: var(--interactive-hover);
+}
+
+/* 批量设置组颜色按钮样式 */
+.tgm-set-group-color-btn {
+  padding: 6px 12px;
+  background-color: var(--interactive-normal);
+  color: var(--text-normal);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.2em;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tgm-set-group-color-btn:hover {
+  background-color: var(--interactive-hover);
+  transform: scale(1.1);
 }
 
 /* 彩虹目录风格的标签样式 */
@@ -1985,4 +2003,519 @@
   padding: 15px;
   background-color: var(--background-primary);
   border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Hierarchy Board Styles */
+.tgm-hierarchy-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 100%;
+  margin-left: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  opacity: 0.3;
+  transition: opacity 0.2s;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 0 4px 4px 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  z-index: 2;
+}
+
+.tgm-hierarchy-trigger:hover {
+  opacity: 0.8;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.tgm-tag-item {
+  padding-right: 24px !important;
+  /* Make space for trigger */
+}
+
+.tgm-hierarchy-board-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.tgm-hierarchy-board-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.tgm-hierarchy-board {
+  position: absolute;
+  right: 10px;
+  top: 50px;
+  min-width: 200px;
+  max-width: 300px;
+  max-height: 80vh;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  padding: 16px;
+  overflow-y: auto;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(20px);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.theme-dark .tgm-hierarchy-board {
+  background: rgba(30, 30, 30, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tgm-hierarchy-board.tgm-show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.tgm-hb-close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  width: 20px;
+  height: 20px;
+  text-align: center;
+  line-height: 20px;
+}
+
+.tgm-hb-close-btn:hover {
+  opacity: 1;
+}
+
+.tgm-hb-item {
+  margin-left: 12px;
+  position: relative;
+  margin-bottom: 2px;
+}
+
+.tgm-hb-item::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--text-muted);
+  opacity: 0.3;
+}
+
+.tgm-hb-item:last-child::before {
+  bottom: 50%;
+}
+
+.tgm-hb-content {
+  display: flex;
+  align-items: center;
+  padding: 2px 0;
+  position: relative;
+}
+
+.tgm-hb-content::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background-color: var(--text-muted);
+  opacity: 0.3;
+}
+
+.tgm-hb-pill {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--background-secondary-alt);
+  color: var(--text-normal);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.tgm-hb-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tgm-hb-item[data-depth="0"]>.tgm-hb-content>.tgm-hb-pill {
+  background-color: rgba(100, 100, 100, 0.1);
+}
+
+.tgm-hb-item[data-depth="1"]>.tgm-hb-content>.tgm-hb-pill {
+  background-color: rgba(100, 100, 100, 0.15);
+}
+
+.tgm-hb-item[data-depth="2"]>.tgm-hb-content>.tgm-hb-pill {
+  background-color: rgba(100, 100, 100, 0.2);
+}
+
+.tgm-hb-item[data-depth="3"]>.tgm-hb-content>.tgm-hb-pill {
+  background-color: rgba(100, 100, 100, 0.25);
+}
+
+/* ================= Hierarchy Board Styles ================= */
+
+/* Trigger Button on Tag Pill */
+.tgm-hierarchy-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  /* 从20px扩大到32px */
+  height: 100%;
+  position: absolute;
+  right: 0;
+  top: 0;
+  background: rgba(0, 0, 0, 0.1);
+  /* Slight overlay */
+  color: var(--text-muted);
+  font-size: 11px;
+  /* 稍微增大字体 */
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 0 6px 6px 0;
+  opacity: 0;
+  /* Hidden by default */
+  transition: all 0.2s ease;
+  z-index: 5;
+}
+
+/* Show trigger on hover over the tag item */
+.tgm-tag-item:hover .tgm-hierarchy-trigger {
+  opacity: 1;
+}
+
+.tgm-hierarchy-trigger:hover {
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-normal);
+}
+
+/* Container for the board */
+.tgm-hierarchy-board-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+/* Overlay (transparent but blocks interaction with board background) */
+.tgm-hierarchy-board-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+/* The Board Itself */
+.tgm-hierarchy-board {
+  position: fixed;
+  /* Anchored by JS top/right */
+  min-width: 220px;
+  max-width: 400px;
+  /* Adaptive width up to max */
+  max-height: 80vh;
+  overflow-y: auto;
+  overflow-x: auto;
+
+  /* Glassmorphism */
+  background: var(--background-primary);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+
+  border-radius: 12px;
+  padding: 12px;
+
+  opacity: 0;
+  transform: translateX(10px) scale(0.95);
+  transition: opacity 0.2s cubic-bezier(0.2, 0, 0.2, 1), transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+
+  pointer-events: auto;
+  z-index: 10000;
+}
+
+.theme-dark .tgm-hierarchy-board {
+  background: rgba(30, 30, 30, 0.65);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.theme-light .tgm-hierarchy-board {
+  background: rgba(255, 255, 255, 0.75);
+  border: 2px solid rgba(0, 0, 0, 0.12);
+}
+
+.tgm-hierarchy-board.tgm-show {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  display: flex;
+  flex-direction: column;
+}
+
+.tgm-hierarchy-board.pinned {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 8px 32px 0 rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+/* Header */
+.tgm-hb-header {
+  font-size: 1.1em;
+  font-weight: bold;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  padding-right: 24px;
+}
+
+/* Close Button */
+.tgm-hb-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.tgm-hb-close-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* Tree Structure */
+.tgm-hb-tree-container {
+  flex: 1;
+  padding: 4px 0;
+}
+
+.tgm-hb-item {
+  margin-top: 2px;
+  padding-left: 0;
+  position: relative;
+}
+
+/* 子节点容器 - 左侧垂直线（细腻的连接线） */
+.tgm-hb-children {
+  margin-left: 16px;
+  margin-top: 4px;
+  padding-left: 12px;
+  position: relative;
+  border-left: 1px solid var(--background-modifier-border);
+}
+
+/* 悬停时垂直线变深 */
+.tgm-hb-item:hover > .tgm-hb-children {
+  border-left-color: var(--text-muted);
+}
+
+.tgm-hb-content-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding: 4px 0;
+  padding-left: 4px;
+}
+
+/* 水平连接线 - 从垂直线到圆点（细腻的连接线） */
+.tgm-hb-content-wrapper::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: var(--background-modifier-border);
+  transition: all 0.2s;
+}
+
+/* 悬停时水平线变深 */
+.tgm-hb-content-wrapper:hover::before {
+  background: var(--text-muted);
+}
+
+/* 圆点标记 */
+.tgm-hb-content-wrapper::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: all 0.2s;
+  z-index: 1;
+}
+
+/* 悬停时圆点变大变亮 */
+.tgm-hb-content-wrapper:hover::after {
+  width: 6px;
+  height: 6px;
+  background: var(--interactive-accent);
+  box-shadow: 0 0 4px var(--interactive-accent);
+}
+
+/* Node Pill */
+.tgm-hb-pill {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--background-secondary-alt);
+  color: var(--text-normal);
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  user-select: none;
+  white-space: nowrap;
+  position: relative;
+}
+
+/* 根据深度调整 pill 的背景透明度 */
+.tgm-hb-item[data-depth="0"] > .tgm-hb-content-wrapper > .tgm-hb-pill {
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+.tgm-hb-item[data-depth="1"] > .tgm-hb-content-wrapper > .tgm-hb-pill {
+  opacity: 0.95;
+}
+
+.tgm-hb-item[data-depth="2"] > .tgm-hb-content-wrapper > .tgm-hb-pill {
+  opacity: 0.9;
+}
+
+.tgm-hb-item[data-depth="3"] > .tgm-hb-content-wrapper > .tgm-hb-pill {
+  opacity: 0.85;
+}
+
+.tgm-hb-pill:hover {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  transform: translateX(4px) scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-color: var(--interactive-accent);
+}
+
+/* 有颜色的标签 - 左侧彩色边框 */
+.tgm-hb-pill.colored {
+  border-left: 3px solid var(--pill-color, var(--interactive-accent));
+  padding-left: 10px;
+}
+
+.tgm-hb-pill.colored:hover {
+  border-left-width: 4px;
+}
+
+/* Auto-add Rules List in Settings */
+.tgm-rules-list {
+  margin-bottom: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.tgm-rule-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.tgm-rule-item:last-child {
+  border-bottom: none;
+}
+
+.tgm-rule-text {
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+}
+
+.tgm-rule-delete {
+  background: transparent;
+  color: var(--text-error);
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.tgm-rule-delete:hover {
+  background: var(--background-modifier-error);
+  border-radius: 4px;
+}
+
+.tgm-add-rule-container input {
+  flex: 1;
+}
+
+.tgm-hb-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 8px;
+  text-align: center;
+}
+
+
+/* 多级标签图标样式 */
+.tgm-tag-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.tgm-tag-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 确保图标和文本在同一行 */
+.tgm-tag-text {
+  display: inline-flex;
+  align-items: center;
+}
+
+.nested-tag .tgm-tag-icon {
+  opacity: 0.9;
 }

@@ -32,6 +32,7 @@
     "noTagsFound": "No tags found",
     "basicSettings": "Basic settings",
     "colorSettings": "Color settings",
+    "tagColors": "Tag Color Management",
     "tagGroupSettings": "Tag group management",
     "currentLanguage": "Current language",
     "languageAutoDetected": "Language automatically detected based on Obsidian's language settings",
@@ -75,7 +76,10 @@
     "colorAppliedSuccess": "Color applied to {count} tag(s)",
     "colorClearedSuccess": "Color cleared from {count} tag(s)",
     "pleaseSelectColor": "Please select a color first",
-    "pleaseEnterPattern": "Please enter a pattern"
+    "pleaseEnterPattern": "Please enter a pattern",
+    "setGroupColor": "Set Group Color",
+    "setGroupColorDesc": "Apply the same color to all tags in this group",
+    "groupColorApplied": "Color applied to {count} tags in {groupName} group"
   },
   "selector": {
     "drag": "Drag",
@@ -118,7 +122,29 @@
     "cycleButtonTooltip": "Cyclic mode: off — click to turn on cyclic mode to restore all tags and keep the number the same. Shift+click to update the tag list from the tag group.",
     "cycleButtonTooltip1": "Cyclic mode: enabled — click to turn off cyclic mode. Shift+click to update the tag list from the tag group.",
     "cycleButtonTooltip2": "Cyclic mode: off — click to turn on cyclic mode to restore all tags. Shift+click to update the tag list from the tag group.",
-    "tagcounttip": "Used {count} times in vault"
+    "tagcounttip": "Used {count} times in vault",
+    "invalidTagRename": "Invalid tag rename operation.",
+    "renamingTag": "Renaming {old} to {new}...",
+    "renameComplete": "Tag renaming complete. Processed {count} files.",
+    "renameNoTagFound": "Tag '{tag}' not found in any files.",
+    "renameCanvasProcessed": "Canvas files processed: {count}",
+    "renameGroupsUpdated": "Tag groups updated: {count}",
+    "renameErrors": "Errors occurred in {count} files (check console).",
+    "scanComplete": "Scan complete, automatically categorized {count} tags.",
+    "cannotInsertInSortMode": "Tag insertion is disabled in Sort Mode. Please disable sorting to switch back to Insert Mode."
+  },
+  "rename": {
+    "commandName": "Rename Tag (Global)",
+    "title": "Rename Tag",
+    "oldTagName": "Old Tag Name",
+    "oldTagNameDesc": "Enter the tag name to replace (without #)",
+    "newTagName": "New Tag Name",
+    "newTagNameDesc": "Enter the new tag name (without #)",
+    "button": "Rename",
+    "sectionTitle": "Global Tag Renaming",
+    "includeCanvas": "Include Canvas files",
+    "includeCanvasDesc": "Also replace tags in Canvas text cards and groups (Experimental)",
+    "warning": "This will modify files across your vault. Please ensure you have a backup!"
   },
   "tagGroupSets": {
     "title": "Tag group sets",
@@ -135,6 +161,45 @@
     "setDeleted": "Tag group set deleted",
     "iconPlaceholder": "e.g. home, star, folder",
     "namePlaceholder": "Enter set name"
+  },
+  "multiLevelAdaptation": {
+    "title": "Multi-level Tag Adaptation",
+    "autoExpand": "Auto Expand Multi-level Tags",
+    "autoExpandDesc": "Automatically convert multi-level tags into Sets (Level 1) and Groups (Level 2).",
+    "expandCommand": "Expand Now",
+    "insertionMode": "Insertion Logic",
+    "insertionModeDesc": "Choose how multi-level tags are inserted.",
+    "modeTagOnly": "Tag Only (Leaf)",
+    "modeWithGroup": "With Group Name",
+    "modeWithSet": "With Set & Group Name",
+    "autoAddTags": "Auto-Add Tags to Groups",
+    "autoAddRules": "Auto-Add Rules",
+    "rulePlaceholder": "Keyword or Regex (e.g. ^book/)",
+    "targetGroupPlaceholder": "Target Group Name",
+    "addRule": "Add Rule",
+    "runAutoAdd": "Run Auto-Add Now",
+    "autoAddOnStartup": "Run on Startup",
+    "tagStyling": "Text Tag Styling",
+    "enableStyling": "Enable Text Tag Styling",
+    "enableStylingDesc": "Apply configured colors to tags in Editor and Preview modes.",
+    "useDataJsonColors": "Use configured colors",
+    "smartMatch": {
+      "title": "Smart Multi-level Tag Matching",
+      "desc": "Works with auto-expand feature to automatically add new multi-level tags to corresponding tag groups (only processes unassigned tags)",
+      "enabled": "Enable Smart Matching",
+      "enabledDesc": "When enabled, new multi-level tags will be automatically matched to tag groups by hierarchy",
+      "currentMode": "Current Match Mode",
+      "modeNote": "Match mode is automatically set based on expand depth. Tags won't be added if no matching group is found",
+      "createIfNotExists": "Auto-create Tag Groups",
+      "createIfNotExistsDesc": "Whether to automatically create tag groups if they don't exist (not yet implemented)"
+    }
+  },
+  "hierarchyBoard": {
+    "title": "Hierarchy Board",
+    "close": "Close",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "noSubTags": "No sub-tags"
   },
   "groupNamesDisplay": "Display included group names directly"
 }

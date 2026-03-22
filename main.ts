@@ -2,6 +2,9 @@ import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, W
 import Sortable from 'sortablejs';
 import { i18n } from './src/i18n';
 import { getAllTags } from "obsidian";
+import { TagRenamer } from './src/TagRenamer';
+import { HierarchyBoard } from './src/HierarchyBoard';
+import changelogsData from './changelogs.json';
 
 
 // Helper function to insert tag into an input element
@@ -38,6 +41,7 @@ interface TagGroup {
 	id?: string; // 唯一标识符，可选是因为旧数据可能没有
 	name: string;
 	tags: string[];
+	autoExpandedTags?: string[]; // 新增：记录通过"展开功能"自动添加的标签（用于区分手动添加）
 }
 
 interface TagGroupSet {
@@ -63,6 +67,19 @@ interface TagGroupManagerSettings {
 	tagColors: Record<string, string>;   // 新增：单个标签颜色设置
 	tagGroupSets: TagGroupSet[];         // 新增：标签组集
 	lastSeenVersion: string;             // 记录用户上次看到的版本
+	// Multi-level tag adaptation
+	autoExpandMultiLevelTags: boolean;
+	autoAddTags: boolean;
+	autoAddRules: string;
+	// 多级标签自动添加配置
+	multiLevelAutoAdd: {
+		enabled: boolean;              // 启用多级标签智能匹配
+		matchMode: 'level1' | 'level2'; // 匹配模式：level1(2级展开) 或 level2(3级展开)
+		createIfNotExists: boolean;    // 如果不存在是否自动创建标签组
+	};
+	enableTextTagStyling: boolean;
+	expandTagPrefixes: string;           // 新增：指定要展开的第一级标签（逗号分隔）
+	expandDepth: number;                 // 新增：展开深度（2或3）
 }
 
 const DEFAULT_SETTINGS: TagGroupManagerSettings = {
@@ -73,7 +90,18 @@ const DEFAULT_SETTINGS: TagGroupManagerSettings = {
 	customColors: ['', '', '', '', '', '', ''],
 	tagColors: {},
 	tagGroupSets: [],
-	lastSeenVersion: ''
+	lastSeenVersion: '',
+	autoExpandMultiLevelTags: false,
+	autoAddTags: false,
+	autoAddRules: '',
+	multiLevelAutoAdd: {
+		enabled: true,
+		matchMode: 'level2', // 默认3级展开
+		createIfNotExists: false
+	},
+	enableTextTagStyling: false,
+	expandTagPrefixes: '',
+	expandDepth: 3
 };
 
 // 生成 UUID 的简单实现
@@ -137,8 +165,63 @@ function getColorClass(colorValue: string): string | null {
 	return colorMap[colorValue] || null;
 }
 
+// 工具函数：判断标签是否应该被隐藏
+// 隐藏规则：
+// 1. 必须是通过"展开功能"自动添加的标签（在 autoExpandedTags 中）
+// 2. 必须是多级标签（包含 '/'）
+// 3. 深度必须 >= 3（二级标签 A/B 永远不隐藏，因为它们是独立的标签组）
+// 4. 在所有标签中，没有其他标签以"该标签/"为前缀（即没有子节点）
+// 
+// 不隐藏的情况：
+// - 手动添加的标签（不在 autoExpandedTags 中）
+// - 非多级标签（如 React）
+// - 二级标签（A/B 格式，这些是独立的标签组）
+// - 有子节点的多级标签（如 前端/框架/React，且存在 前端/框架/React/Hooks）
+function shouldHideTag(tag: string, allTags: string[], autoExpandedTags?: string[], minDepth: number = 3): boolean {
+	// 如果没有 autoExpandedTags 或标签不在其中，说明是手动添加的，不隐藏
+	if (!autoExpandedTags || !autoExpandedTags.includes(tag)) {
+		return false;
+	}
+	
+	// 如果不是多级标签，不隐藏
+	if (!tag.includes('/')) {
+		return false;
+	}
+	
+	// 计算标签深度
+	const depth = tag.split('/').length;
+	
+	// 二级标签（A/B）永远不隐藏，因为它们是独立的标签组
+	if (depth === 2) {
+		return false;
+	}
+	
+	// 对于3级及以上的标签，如果深度 < minDepth，不隐藏
+	if (depth < minDepth) {
+		return false;
+	}
+	
+	// 检查是否有子节点
+	const prefix = tag + '/';
+	const hasChildren = allTags.some(t => t.startsWith(prefix));
+	
+	// 如果没有子节点，则是叶子节点，需要隐藏
+	return !hasChildren;
+}
+
+// 工具函数：判断标签组的展开深度
+// 如果标签组在某个组集中，说明是3级展开；否则是2级展开
+function getGroupExpandDepth(group: TagGroup, tagGroupSets: TagGroupSet[]): number {
+	if (!group.id) return 2;
+	
+	// 检查是否有组集包含这个标签组
+	const inSet = tagGroupSets.some(set => set.groupIds.includes(group.id!));
+	return inSet ? 3 : 2;
+}
+
 export default class TagGroupManagerPlugin extends Plugin {
 	settings: TagGroupManagerSettings;
+	hierarchyBoard: HierarchyBoard;
 	private registeredCommands: string[] = []; // 跟踪已注册的命令ID
 
 
@@ -165,6 +248,10 @@ export default class TagGroupManagerPlugin extends Plugin {
 		const locale = momentLocale.startsWith('zh') ? 'zh' : 'en';
 		i18n.setLocale(locale);
 
+		// Initialize HierarchyBoard
+		this.hierarchyBoard = new HierarchyBoard(this.app, this);
+		this.addChild(this.hierarchyBoard);
+
 		// 注册视图类型
 		this.registerView(
 			TAG_GROUP_VIEW,
@@ -177,6 +264,16 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 		// 添加星星按钮到右侧边栏
 		this.addRibbonIcon('star', i18n.t('overview.title'), () => {
+			// Feature #4: If no groups exist, prompt user and open settings
+			if (this.settings.tagGroups.length === 0) {
+				new Notice(i18n.t('messages.noGroupsCreateFirst') || 'No tag groups found. Please create one in settings.');
+				// Open settings tab
+				// @ts-ignore
+				this.app.setting.open();
+				// @ts-ignore
+				this.app.setting.openTabById(this.manifest.id);
+				return;
+			}
 			// 激活标签组管理器视图
 			void this.activateView();
 			// 关闭所有已打开的标签选择器
@@ -191,6 +288,41 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 		// 检查版本更新并显示更新日志
 		this.checkVersionAndShowChangelog();
+
+		// Apply text tag styling if enabled
+		this.applyTextTagStyling();
+
+		// 监听视图模式切换（Live Preview <-> Reading View）
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => {
+				// 当布局改变时（包括模式切换），重新处理标签
+				if (this.settings.enableTextTagStyling) {
+					// 延迟一小段时间，确保DOM已经更新
+					setTimeout(() => {
+						this.processExistingTags();
+					}, 100);
+				}
+			})
+		);
+
+		// 监听活动叶子变化（切换文件时）
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', () => {
+				if (this.settings.enableTextTagStyling) {
+					setTimeout(() => {
+						this.processExistingTags();
+					}, 100);
+				}
+			})
+		);
+
+		// Auto-run scanner on startup if enabled
+		if (this.settings.autoAddTags) {
+			// Run after a short delay to ensure cache is ready
+			this.app.workspace.onLayoutReady(async () => {
+				await this.autoScanTagsToGroups();
+			});
+		}
 
 		// 添加右键菜单命令：清除笔记中的所有标签
 		this.registerEvent(
@@ -207,6 +339,8 @@ export default class TagGroupManagerPlugin extends Plugin {
 				}
 			})
 		);
+
+
 	}
 
 	// 检查版本更新并显示更新日志
@@ -246,38 +380,20 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 	// 获取指定版本的更新日志
 	private getChangelog(version: string): string | null {
-		const changelogs: Record<string, string> = {
-			'1.5.10': `
+		// 从导入的JSON文件获取changelog数据
+		const versionData = changelogsData[version as keyof typeof changelogsData];
+		if (!versionData) return null;
 
-### ✨ 核心功能增强
-- **新增标签组集管理功能**：现在你可以把任意标签组添加到一个“集”中，以应对不同的工作环境。支持在组集内独立排序标签组。不同集的展示和切换均可在右侧功能栏中实现，图标可自定义。
-- **支持实时预览属性插入**：终于不需要切换到源代码模式就能编辑标签了！现在支持直接点击插入到笔记属性（Properties/YAML）区域。
-- **增加 Canvas 支持**：现在可以直接将标签插入到 Canvas 画布中的卡片和内嵌文档里。
+		// 根据当前语言返回对应的changelog
+		const locale = i18n.getLocale();
+		const changelogArray = locale === 'zh' ? versionData.zh : versionData.en;
 
-### 🚀 体验优化
-- **重构标签颜色设置**：
-    - **交互优化**：独立设置区域，支持普通字符串匹配和正则表达式匹配。支持左键单击进行详细设置（预设/自定义，自动储存7个）。
-    - **样式标准化**：开启后全体标签应用柔和渐变背景样式，统一了彩虹标签、自定义颜色标签在不同模式下的视觉表现。
-- **YAML 连续插入修复**：修复了在源码模式下，连续插入标签会导致光标跳出的问题。
-- **UI & 交互细节**：设置页面“使用说明”显示优化；浮动标签选择器位置及拖动体验丝滑优化。
+		// 如果是数组，用换行符连接；否则直接返回字符串
+		const changelog = Array.isArray(changelogArray) 
+			? changelogArray.join('\n') 
+			: changelogArray;
 
----
-
-
-### ✨ Core Features
-- **Tag Group Sets**: Manage tag groups in "Sets" for different workflows. Support independent sorting and quick switching via the sidebar menu with custom icons.
-- **Live Preview Properties**: No need to switch source mode anymore! Insert tags directly into the Properties (YAML) section in Live Preview.
-- **Canvas Support**: Fully supported inserting tags into cards and notes within Obsidian Canvas.
-
-### 🚀 Improvements
-- **Refactored Color Settings**:
-    - **Interaction**: Independent settings area supporting string/regex matching. Left-click for detailed settings (presets/custom, history of 7).
-    - **Standardized Styles**: Unified visual styles for rainbow and custom tags with soft gradient backgrounds.
-- **YAML Cursor Fix**: Fixed cursor jumping issue during continuous insertion in YAML frontmatter.
-- **UX Details**: Improved "Usage Tips" display; Smoother positioning and dragging for the Floating Tag Selector.`
-		};
-
-		return changelogs[version] || null;
+		return changelog || null;
 	}
 
 	// 清除笔记中的所有标签
@@ -353,7 +469,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 				name: i18n.t('commands.insertFrom').replace('{groupName}', group.name),
 				editorCallback: (editor: Editor, _view: MarkdownView) => {
 					if (group.tags.length > 0) {
-						new TagSelectorModal(this.app, editor, group.tags.slice(), this).open();
+						new TagSelectorModal(this.app, editor, group.tags.slice(), this, group).open();
 					} else {
 						new Notice(i18n.t('messages.noTagsInGroup'));
 					}
@@ -365,6 +481,9 @@ export default class TagGroupManagerPlugin extends Plugin {
 	}
 
 	onunload() {
+		// 停止Live Preview观察器
+		this.stopLivePreviewObserver();
+		
 		// 清理所有注册的命令
 		this.registeredCommands.forEach(commandId => {
 			// @ts-ignore - removeCommand 是私有方法，但这是清理命令的正确方式
@@ -375,6 +494,15 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		
+		// 根据展开深度自动设置智能匹配模式
+		if (this.settings.expandDepth === 2) {
+			// 2级展开: 按第一级匹配
+			this.settings.multiLevelAutoAdd.matchMode = 'level1';
+		} else if (this.settings.expandDepth === 3) {
+			// 3级展开: 按第二级匹配
+			this.settings.multiLevelAutoAdd.matchMode = 'level2';
+		}
 	}
 
 	async saveSettings() {
@@ -407,6 +535,606 @@ export default class TagGroupManagerPlugin extends Plugin {
 			void workspace.revealLeaf(leaf);
 		}
 	}
+
+	async convertMultiLevelTagsToGroups() {
+		const allFiles = this.app.vault.getMarkdownFiles();
+		const allTags = new Set<string>();
+
+		for (const file of allFiles) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (cache) {
+				const tags = getAllTags(cache);
+				if (tags) {
+					tags.forEach(t => allTags.add(t.substring(1))); // Remove #
+				}
+			}
+		}
+
+		let changesMade = false;
+
+		// 解析用户指定的第一级标签前缀
+		const prefixes = this.settings.expandTagPrefixes
+			.split(',')
+			.map(p => p.trim())
+			.filter(p => p.length > 0);
+
+		const expandDepth = this.settings.expandDepth || 3;
+
+		// 辅助函数：生成唯一的组集名称
+		const getUniqueSetName = (baseName: string): string => {
+			let name = baseName;
+			let counter = 1;
+			while (this.settings.tagGroupSets.some(s => s.name === name)) {
+				name = `${baseName} (${counter})`;
+				counter++;
+			}
+			return name;
+		};
+
+		// 辅助函数：生成唯一的标签组名称
+		const getUniqueGroupName = (baseName: string): string => {
+			let name = baseName;
+			let counter = 1;
+			while (this.settings.tagGroups.some(g => g.name === name)) {
+				name = `${baseName} (${counter})`;
+				counter++;
+			}
+			return name;
+		};
+
+		if (expandDepth === 3) {
+			// 3级展开模式
+			const groupsToUpdate = new Map<string, Set<string>>(); // Key: "Set/Group", Value: Set of tags to add
+			const twoLevelGroups = new Map<string, Set<string>>(); // Key: "GroupName", Value: Set of tags (for 2-level tags)
+
+			for (const tag of allTags) {
+				const parts = tag.split('/');
+				
+				if (parts.length === 2) {
+					// 两级标签：A/B → 标签组=A，标签=A/B
+					const groupName = parts[0];
+					
+					// 如果用户指定了前缀，只处理匹配的标签
+					if (prefixes.length > 0 && !prefixes.includes(groupName)) {
+						continue;
+					}
+					
+					if (!twoLevelGroups.has(groupName)) twoLevelGroups.set(groupName, new Set());
+					twoLevelGroups.get(groupName)!.add(tag);
+					
+				} else if (parts.length >= 3) {
+					// 三级及以上标签：A/B/C/D/E → 组集=A，标签组=B，标签=C、C/D、C/D/E
+					const setName = parts[0];
+					
+					// 如果用户指定了前缀，只处理匹配的标签
+					if (prefixes.length > 0 && !prefixes.includes(setName)) {
+						continue;
+					}
+					
+					const groupName = parts[1];
+					const key = `${setName}/${groupName}`;
+
+					// 从第3层开始遍历到最后一层，全部添加
+					for (let i = 2; i < parts.length; i++) {
+						const tagToAdd = parts.slice(0, i + 1).join('/');
+						if (!groupsToUpdate.has(key)) groupsToUpdate.set(key, new Set());
+						groupsToUpdate.get(key)!.add(tagToAdd);
+					}
+				}
+			}
+
+			// 处理两级标签（不创建组集）
+			for (const [groupName, tagsToAdd] of twoLevelGroups.entries()) {
+				// 生成唯一的标签组名称
+				const uniqueGroupName = getUniqueGroupName(groupName);
+				
+				// Find or Create Group
+				let group = this.settings.tagGroups.find(g => g.name === uniqueGroupName);
+				if (!group) {
+					group = { id: generateUUID(), name: uniqueGroupName, tags: [], autoExpandedTags: [] };
+					this.settings.tagGroups.push(group);
+					changesMade = true;
+				} else {
+					if (!group.autoExpandedTags) {
+						group.autoExpandedTags = [];
+					}
+				}
+
+				// Add Tags
+				const sortedTags = Array.from(tagsToAdd).sort();
+				for (const t of sortedTags) {
+					const wasAutoExpanded = group.autoExpandedTags && group.autoExpandedTags.includes(t);
+					const isCurrentlyInGroup = group.tags.includes(t);
+					
+					if (!isCurrentlyInGroup) {
+						if (!wasAutoExpanded) {
+							group.tags.push(t);
+							changesMade = true;
+							
+							if (!group.autoExpandedTags!.includes(t)) {
+								group.autoExpandedTags!.push(t);
+								changesMade = true;
+							}
+						}
+					} else {
+						if (!group.autoExpandedTags!.includes(t)) {
+							group.autoExpandedTags!.push(t);
+							changesMade = true;
+						}
+					}
+				}
+			}
+
+			// 处理三级及以上标签（创建组集）
+			for (const [key, tagsToAdd] of groupsToUpdate.entries()) {
+				const [setName, groupName] = key.split('/');
+
+				// 1. Find or Create Set（使用唯一名称）
+				const uniqueSetName = getUniqueSetName(setName);
+				let set = this.settings.tagGroupSets.find(s => s.name === uniqueSetName);
+				if (!set) {
+					set = { id: generateUUID(), name: uniqueSetName, icon: 'folder', groupIds: [] };
+					this.settings.tagGroupSets.push(set);
+					changesMade = true;
+				}
+
+				// 2. Find or Create Group（使用唯一名称）
+				const uniqueGroupName = getUniqueGroupName(groupName);
+				let group = this.settings.tagGroups.find(g => g.name === uniqueGroupName);
+				if (!group) {
+					group = { id: generateUUID(), name: uniqueGroupName, tags: [], autoExpandedTags: [] };
+					this.settings.tagGroups.push(group);
+					if (!set.groupIds.includes(group.id!)) set.groupIds.push(group.id!);
+					changesMade = true;
+				} else {
+					if (group.id && !set.groupIds.includes(group.id)) {
+						set.groupIds.push(group.id);
+						changesMade = true;
+					}
+					if (!group.autoExpandedTags) {
+						group.autoExpandedTags = [];
+					}
+				}
+
+				// 3. Add Tags
+				const sortedTags = Array.from(tagsToAdd).sort();
+				for (const t of sortedTags) {
+					const wasAutoExpanded = group.autoExpandedTags && group.autoExpandedTags.includes(t);
+					const isCurrentlyInGroup = group.tags.includes(t);
+					
+					if (!isCurrentlyInGroup) {
+						if (!wasAutoExpanded) {
+							group.tags.push(t);
+							changesMade = true;
+							
+							if (!group.autoExpandedTags!.includes(t)) {
+								group.autoExpandedTags!.push(t);
+								changesMade = true;
+							}
+						}
+					} else {
+						if (!group.autoExpandedTags!.includes(t)) {
+							group.autoExpandedTags!.push(t);
+							changesMade = true;
+						}
+					}
+				}
+			}
+		} else if (expandDepth === 2) {
+			// 2级展开：A/B/C/D → 标签组=A，标签=B、B/C、B/C/D（不创建组集）
+			const groupsToUpdate = new Map<string, Set<string>>(); // Key: "GroupName", Value: Set of tags to add
+
+			for (const tag of allTags) {
+				const parts = tag.split('/');
+				if (parts.length >= 2) {
+					const groupName = parts[0];
+					
+					// 如果用户指定了前缀，只处理匹配的标签
+					if (prefixes.length > 0 && !prefixes.includes(groupName)) {
+						continue;
+					}
+
+					// 从第2层开始遍历到最后一层，全部添加
+					for (let i = 1; i < parts.length; i++) {
+						const tagToAdd = parts.slice(0, i + 1).join('/');
+						if (!groupsToUpdate.has(groupName)) groupsToUpdate.set(groupName, new Set());
+						groupsToUpdate.get(groupName)!.add(tagToAdd);
+					}
+				}
+			}
+
+			// Apply updates for 2-level expansion
+			for (const [groupName, tagsToAdd] of groupsToUpdate.entries()) {
+				// 生成唯一的标签组名称
+				const uniqueGroupName = getUniqueGroupName(groupName);
+				
+				// Find or Create Group
+				let group = this.settings.tagGroups.find(g => g.name === uniqueGroupName);
+				if (!group) {
+					group = { id: generateUUID(), name: uniqueGroupName, tags: [], autoExpandedTags: [] };
+					this.settings.tagGroups.push(group);
+					changesMade = true;
+				} else {
+					if (!group.autoExpandedTags) {
+						group.autoExpandedTags = [];
+					}
+				}
+
+				// Add Tags
+				const sortedTags = Array.from(tagsToAdd).sort();
+				for (const t of sortedTags) {
+					const wasAutoExpanded = group.autoExpandedTags && group.autoExpandedTags.includes(t);
+					const isCurrentlyInGroup = group.tags.includes(t);
+					
+					if (!isCurrentlyInGroup) {
+						if (!wasAutoExpanded) {
+							group.tags.push(t);
+							changesMade = true;
+							
+							if (!group.autoExpandedTags!.includes(t)) {
+								group.autoExpandedTags!.push(t);
+								changesMade = true;
+							}
+						}
+					} else {
+						if (!group.autoExpandedTags!.includes(t)) {
+							group.autoExpandedTags!.push(t);
+							changesMade = true;
+						}
+					}
+				}
+			}
+		}
+
+		if (changesMade) {
+			await this.saveSettings();
+			new Notice(i18n.t('messages.multiLevelConverted') || 'Multi-level tags converted.');
+		} else {
+			new Notice(i18n.t('messages.noMultiLevelConverted') || 'No new tags to convert.');
+		}
+	}
+
+	async autoScanTagsToGroups(): Promise<number> {
+		const rules = this.settings.autoAddRules.split(';').filter(r => r.trim().length > 0);
+		
+		// 如果既没有规则也没有启用智能匹配,直接返回
+		if (rules.length === 0 && !this.settings.multiLevelAutoAdd.enabled) {
+			return 0;
+		}
+
+		const allFiles = this.app.vault.getMarkdownFiles();
+		const allTags = new Set<string>(); // All unique tags in vault
+
+		for (const file of allFiles) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (cache) {
+				const tags = getAllTags(cache);
+				if (tags) {
+					tags.forEach(t => allTags.add(t.substring(1)));
+				}
+			}
+		}
+
+		const groupsToUpdate = new Map<string, Set<string>>();
+
+		for (const tag of allTags) {
+			let alreadyMatched = false; // 标记标签是否已经被智能匹配处理
+			
+			// 检查标签是否已经在任何标签组中
+			const isTagInAnyGroup = this.settings.tagGroups.some(g => g.tags.includes(tag));
+			
+			// 多级标签智能匹配逻辑 - 只处理未被添加的标签
+			const tagParts = tag.split('/');
+			const isMultiLevel = tagParts.length >= 2;
+			
+			if (isMultiLevel && this.settings.multiLevelAutoAdd.enabled && !isTagInAnyGroup) {
+				let matchedGroup: string | null = null;
+				
+				// 根据匹配模式进行匹配(二选一,找不到就不添加)
+				if (this.settings.multiLevelAutoAdd.matchMode === 'level1') {
+					// level1模式: 只按第一级匹配(适配2级展开)
+					const level1 = tagParts[0];
+					const group = this.settings.tagGroups.find(g => g.name === level1);
+					if (group) {
+						matchedGroup = group.name;
+					}
+				} else if (this.settings.multiLevelAutoAdd.matchMode === 'level2' && tagParts.length >= 2) {
+					// level2模式: 只按第二级匹配(适配3级展开)
+					const level2 = tagParts[1];
+					const group = this.settings.tagGroups.find(g => g.name === level2);
+					if (group) {
+						matchedGroup = group.name;
+					}
+				}
+				
+				// 如果找到匹配的组，添加标签
+				if (matchedGroup) {
+					if (!groupsToUpdate.has(matchedGroup)) {
+						groupsToUpdate.set(matchedGroup, new Set());
+					}
+					
+					// 对于多级标签，添加所有层级节点（从第三级开始，或从第二级开始如果只有两级）
+					if (tagParts.length >= 3) {
+						for (let i = 2; i < tagParts.length; i++) {
+							const tagToAdd = tagParts.slice(0, i + 1).join('/');
+							groupsToUpdate.get(matchedGroup)!.add(tagToAdd);
+						}
+					} else {
+						// 只有两级的标签，直接添加完整标签
+						groupsToUpdate.get(matchedGroup)!.add(tag);
+					}
+					
+					alreadyMatched = true; // 标记为已匹配，跳过规则匹配
+				}
+			}
+			
+			// 规则匹配逻辑（原有逻辑）- 只有在智能匹配未处理时才执行
+			if (!alreadyMatched) {
+				for (const rule of rules) {
+				// 改进的规则解析：使用indexOf避免冒号在pattern或groupName中的问题
+				const colonIndex = rule.indexOf(':');
+				if (colonIndex === -1) continue;
+				
+				const pattern = rule.substring(0, colonIndex).trim();
+				const targetGroupName = rule.substring(colonIndex + 1).trim();
+				
+				if (!pattern || !targetGroupName) continue;
+
+				let matched = false;
+				try {
+					const regex = new RegExp(pattern, 'i');
+					if (regex.test(tag)) matched = true;
+				} catch {
+					if (tag.toLowerCase().includes(pattern.toLowerCase())) matched = true;
+				}
+
+				if (matched) {
+					const tagParts = tag.split('/');
+					if (tagParts.length >= 3) {
+						// 修复：收录所有节点，与展开功能保持一致
+						for (let i = 2; i < tagParts.length; i++) {
+							const tagToAdd = tagParts.slice(0, i + 1).join('/');
+							if (!groupsToUpdate.has(targetGroupName)) groupsToUpdate.set(targetGroupName, new Set());
+							groupsToUpdate.get(targetGroupName)!.add(tagToAdd);
+						}
+					} else {
+						// For non-deep tags, just add them
+						if (!groupsToUpdate.has(targetGroupName)) groupsToUpdate.set(targetGroupName, new Set());
+						groupsToUpdate.get(targetGroupName)!.add(tag);
+					}
+				}
+			}
+			} // 结束 if (!alreadyMatched) 块
+		}
+
+		let addedCount = 0;
+		let changesMade = false;
+
+		// 修复：支持autoExpandedTags标记，尊重用户删除操作
+		for (const [groupName, tagsToAdd] of groupsToUpdate.entries()) {
+			const group = this.settings.tagGroups.find(g => g.name === groupName);
+			if (group) {
+				// 确保 autoExpandedTags 字段存在
+				if (!group.autoExpandedTags) {
+					group.autoExpandedTags = [];
+				}
+				
+				const sortedTags = Array.from(tagsToAdd).sort();
+				for (const t of sortedTags) {
+					// 检查标签是否被用户手动删除
+					const wasAutoExpanded = group.autoExpandedTags.includes(t);
+					const isCurrentlyInGroup = group.tags.includes(t);
+					
+					if (!isCurrentlyInGroup) {
+						// 标签不在组中
+						if (!wasAutoExpanded) {
+							// 这是新标签，添加它
+							group.tags.push(t);
+							changesMade = true;
+							addedCount++;
+							
+							// 记录为自动添加的标签
+							if (!group.autoExpandedTags.includes(t)) {
+								group.autoExpandedTags.push(t);
+							}
+						}
+						// 如果 wasAutoExpanded 为 true，说明用户手动删除了，不重新添加
+					} else {
+						// 标签已在组中，确保它在 autoExpandedTags 中
+						if (!group.autoExpandedTags.includes(t)) {
+							group.autoExpandedTags.push(t);
+						}
+					}
+				}
+			}
+		}
+
+		if (changesMade) {
+			await this.saveSettings();
+		}
+		return addedCount;
+	}
+
+	private livePreviewObserver: MutationObserver | null = null;
+
+	applyTextTagStyling() {
+		if (!this.settings.enableTextTagStyling) {
+			const existingStyle = document.getElementById('tgm-dynamic-tag-styles');
+			if (existingStyle) existingStyle.remove();
+			this.stopLivePreviewObserver();
+			return;
+		}
+
+		let css = '';
+		const tagColors = this.settings.tagColors;
+		const presetColors: { [key: string]: string } = {
+			'var(--color-red)': '#e74c3c',
+			'var(--color-blue)': '#3498db',
+			'var(--color-green)': '#2ecc71',
+			'var(--color-orange)': '#f39c12',
+			'var(--color-purple)': '#9b59b6',
+			'var(--color-cyan)': '#1abc9c',
+			'var(--color-pink)': '#e91e63'
+		};
+
+		for (const [tag, color] of Object.entries(tagColors)) {
+			if (!color) continue;
+
+			// Generate styles for both Reading View and Live Preview
+			let rgb = { r: 0, g: 0, b: 0 };
+
+			let hexColor = color;
+			if (color.startsWith('var(--')) {
+				hexColor = presetColors[color] || '#888888';
+			}
+
+			if (hexColor.startsWith('#')) {
+				const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hexColor);
+				if (result) rgb = { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) };
+			}
+
+			// 模仿属性标签样式：更浅的背景色，更深的文字色
+			const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`;
+			const textColor = `rgb(${Math.floor(rgb.r * 0.65)}, ${Math.floor(rgb.g * 0.65)}, ${Math.floor(rgb.b * 0.65)})`;
+
+			// 转义标签名中的特殊字符（用于CSS选择器）
+			const escapedTag = tag.replace(/[\/\.\+\*\?\^\$\(\)\[\]\{\}\|\\]/g, '\\$&');
+			// 为data属性生成安全的值（替换特殊字符为连字符）
+			const safeTagAttr = tag.replace(/[\/\s]/g, '-');
+
+			css += `
+            /* Reading View (阅读模式) - 模仿属性标签样式 */
+            .markdown-preview-view a.tag[href="#${escapedTag}" i],
+            .markdown-rendered a.tag[href="#${escapedTag}" i] { 
+                background-color: ${bgColor} !important; 
+                color: ${textColor} !important;
+                border: none !important;
+                border-radius: 13px !important;
+                padding: 2px 8px !important;
+                font-size: 13px !important;
+                line-height: 13px !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                height: 17px !important;
+                text-decoration: none !important;
+            }
+            
+            /* Live Preview (实时预览/编辑模式) - 模仿属性标签样式 */
+            /* 标签容器样式 */
+            .cm-line .cm-hashtag[data-tag-name="${safeTagAttr}"] {
+                background-color: ${bgColor} !important;
+                color: ${textColor} !important;
+                border: none !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                height: 17px !important;
+                line-height: 13px !important;
+                font-size: 13px !important;
+            }
+            
+            /* 标签开始（#号）的圆角和内边距 */
+            .cm-line .cm-hashtag-begin[data-tag-name="${safeTagAttr}"] {
+                border-top-left-radius: 13px !important;
+                border-bottom-left-radius: 13px !important;
+                padding-left: 8px !important;
+            }
+            
+            /* 标签结束（文本）的圆角和内边距 */
+            .cm-line .cm-hashtag-end[data-tag-name="${safeTagAttr}"] {
+                border-top-right-radius: 13px !important;
+                border-bottom-right-radius: 13px !important;
+                padding-right: 8px !important;
+            }
+            `;
+		}
+
+		let styleEl = document.getElementById('tgm-dynamic-tag-styles') as HTMLStyleElement;
+		if (!styleEl) {
+			styleEl = document.createElement('style');
+			styleEl.id = 'tgm-dynamic-tag-styles';
+			document.head.appendChild(styleEl);
+		}
+		styleEl.textContent = css;
+
+		// 启动Live Preview标签监听器
+		this.startLivePreviewObserver();
+	}
+
+	private startLivePreviewObserver() {
+		// 停止现有的观察器
+		this.stopLivePreviewObserver();
+
+		// 处理现有的标签元素
+		this.processExistingTags();
+
+		// 创建新的观察器来监听DOM变化
+		this.livePreviewObserver = new MutationObserver((mutations) => {
+			for (const mutation of mutations) {
+				if (mutation.type === 'childList') {
+					mutation.addedNodes.forEach((node) => {
+						if (node.nodeType === Node.ELEMENT_NODE) {
+							const element = node as HTMLElement;
+							// 处理新添加的标签元素
+							this.processTagElement(element);
+							// 处理子元素中的标签
+							const hashtags = element.querySelectorAll('.cm-hashtag');
+							hashtags.forEach((tag) => this.processTagElement(tag as HTMLElement));
+						}
+					});
+				}
+			}
+		});
+
+		// 观察整个文档的变化
+		this.livePreviewObserver.observe(document.body, {
+			childList: true,
+			subtree: true
+		});
+	}
+
+	private stopLivePreviewObserver() {
+		if (this.livePreviewObserver) {
+			this.livePreviewObserver.disconnect();
+			this.livePreviewObserver = null;
+		}
+	}
+
+	private processExistingTags() {
+		// 处理所有现有的标签元素
+		const hashtags = document.querySelectorAll('.cm-hashtag');
+		hashtags.forEach((tag) => this.processTagElement(tag as HTMLElement));
+	}
+
+	private processTagElement(element: HTMLElement) {
+		// 只处理标签文本部分（cm-hashtag-end）
+		if (!element.classList.contains('cm-hashtag-end')) {
+			return;
+		}
+
+		// 如果已经处理过，跳过
+		if (element.hasAttribute('data-tag-name')) {
+			return;
+		}
+
+		// 获取标签文本
+		const tagText = element.textContent?.trim();
+		if (!tagText) return;
+
+		// 检查这个标签是否有配置的颜色
+		if (this.settings.tagColors[tagText]) {
+			// 生成安全的属性值
+			const safeTagAttr = tagText.replace(/[\/\s]/g, '-');
+			
+			// 为标签文本元素添加data属性
+			element.setAttribute('data-tag-name', safeTagAttr);
+			
+			// 找到对应的#号元素（前一个兄弟节点）
+			const prevSibling = element.previousElementSibling;
+			if (prevSibling && prevSibling.classList.contains('cm-hashtag-begin')) {
+				prevSibling.setAttribute('data-tag-name', safeTagAttr);
+			}
+		}
+	}
 }
 
 // 标签选择器（不使用模态框）
@@ -428,13 +1156,15 @@ class TagSelectorModal {
 	private pinButton: HTMLElement;
 	private groupName: string = '';
 	private isSearchBoxFocused: boolean = false; // 搜索框是否处于焦点状态
+	private currentGroup: TagGroup | null = null; // 当前标签组
 
-	constructor(app: App, editor: Editor, tags: string[], plugin?: TagGroupManagerPlugin) {
+	constructor(app: App, editor: Editor, tags: string[], plugin?: TagGroupManagerPlugin, group?: TagGroup) {
 		this.app = app;
 		this.editor = editor;
 		this.tags = tags;
 		this.originalTags = [...tags]; // 保存原始标签列表的副本
 		this.plugin = plugin || null;
+		this.currentGroup = group || null;
 		// 创建根元素
 		this.rootEl = document.createElement('div');
 		this.rootEl.addClass('tag-group-selector-modal');
@@ -739,8 +1469,16 @@ class TagSelectorModal {
 		// 清空容器
 		this.containerEl.empty();
 
+		// 过滤掉自动展开的叶子节点（末节点）- 这些节点只在设置页面显示
+		// 手动添加的标签不会被过滤
+		const autoExpandedTags = this.currentGroup?.autoExpandedTags;
+		const minDepth = this.currentGroup && this.plugin 
+			? getGroupExpandDepth(this.currentGroup, this.plugin.settings.tagGroupSets)
+			: 3;
+		const filteredTags = this.tags.filter(tag => !shouldHideTag(tag, this.tags, autoExpandedTags, minDepth));
+
 		// 渲染每个标签
-		for (const tag of this.tags) {
+		for (const tag of filteredTags) {
 			const tagEl = this.containerEl.createDiv('tgm-tag-item');
 
 			// 检查标签是否有效
@@ -812,15 +1550,51 @@ class TagSelectorModal {
 
 			// 检查是否为嵌套标签并添加图标
 			let displayText = tag;
-			if (tag.includes('/')) {
-				displayText = `📁 ${tag}`;
+			const isMultiLevelTag = tag.includes('/');
+			
+			if (isMultiLevelTag) {
+				// 添加lucide tags图标
+				const iconEl = tagTextEl.createSpan('tgm-tag-icon');
+				setIcon(iconEl, 'tags');
+				// Show shortened name (leaf)
+				displayText = ` ${tag.split('/').pop()}`;
 				tagTextEl.addClass('nested-tag');
 			}
+			tagTextEl.appendText(displayText);
 
-			tagTextEl.setText(displayText);
+			// Add Hierarchy Board Trigger (Tag Selector) - 仅用于多级标签
+			if (isMultiLevelTag && this.plugin) {
+				const triggerEl = tagEl.createDiv('tgm-hierarchy-trigger');
+				triggerEl.setText('>>');
+				triggerEl.removeAttribute('aria-label');
 
-			// 使用Obsidian原生的tooltip系统，设置在整个标签项上
-			tagEl.setAttribute('aria-label', tag);
+				triggerEl.addEventListener('mouseenter', (e) => {
+					const rect = triggerEl.getBoundingClientRect();
+					this.plugin?.hierarchyBoard.show(tag, rect, false, this);
+				});
+
+				triggerEl.addEventListener('mouseleave', (e) => {
+					this.plugin?.hierarchyBoard.hide(200);
+				});
+
+				triggerEl.addEventListener('mousedown', (e) => {
+					e.stopPropagation();
+				});
+
+				triggerEl.addEventListener('click', (e) => {
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					e.preventDefault();
+					const rect = triggerEl.getBoundingClientRect();
+					this.plugin?.hierarchyBoard.show(tag, rect, true, this);
+				});
+			}
+
+			// 设置 Tooltip - 仅用于非多级标签
+			// 多级标签通过 hierarchy board 查看完整路径，不需要 tooltip
+			if (!isMultiLevelTag) {
+				tagTextEl.setAttribute('aria-label', tag);
+			}
 
 			// 添加标签计数
 			const tagCountEl = tagEl.createDiv('tgm-tag-count');
@@ -1130,6 +1904,7 @@ class ColorPickerModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass('tgm-color-picker-modal');
 
+
 		contentEl.createEl('h2', { text: i18n.t('settings.selectColor') || '选择颜色' });
 
 		// 1. 预设颜色
@@ -1420,11 +2195,17 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		selectorList.createEl('li', { text: i18n.t('settings.tip5') });
 		selectorList.createEl('li', { text: i18n.t('settings.tip6') });
 
+		// ==================== 多级标签适配设置区域 ====================
+		this.renderMultiLevelSettings(containerEl);
+
 		// ==================== 颜色设置区域 ====================
 		this.renderColorSettings(containerEl);
 
 		// ==================== 组集管理区域 ====================
 		this.renderTagGroupSetSettings(containerEl);
+
+		// ==================== 全局标签重命名区域 ====================
+		this.renderRenameSettings(containerEl);
 
 		// ==================== 标签组管理区域 ====================
 		this.renderTagGroupSettings(containerEl);
@@ -1432,9 +2213,310 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 
 
+
+	renderMultiLevelSettings(containerEl: HTMLElement): void {
+		const section = containerEl.createDiv('settings-section');
+		new Setting(section).setName(i18n.t('multiLevelAdaptation.title') || '多级标签适配').setHeading();
+
+		// 展开配置区域（集中显示）
+		const expandConfigContainer = section.createDiv('tgm-expand-config-container');
+		expandConfigContainer.style.border = '1px solid var(--background-modifier-border)';
+		expandConfigContainer.style.borderRadius = '6px';
+		expandConfigContainer.style.padding = '16px';
+		expandConfigContainer.style.marginBottom = '20px';
+		expandConfigContainer.style.backgroundColor = 'var(--background-secondary)';
+
+		// 展开深度
+		new Setting(expandConfigContainer)
+			.setName('展开深度')
+			.setDesc('3级展开：前三级作为组集/标签组/标签；2级展开：前两级作为标签组/标签（不创建组集）')
+			.addDropdown(dropdown => dropdown
+				.addOption('3', '3级展开（组集/标签组/标签）')
+				.addOption('2', '2级展开（标签组/标签）')
+				.setValue(this.plugin.settings.expandDepth.toString())
+				.onChange(async (value) => {
+					this.plugin.settings.expandDepth = parseInt(value);
+					// 根据展开深度自动设置智能匹配模式
+					if (parseInt(value) === 2) {
+						this.plugin.settings.multiLevelAutoAdd.matchMode = 'level1';
+					} else {
+						this.plugin.settings.multiLevelAutoAdd.matchMode = 'level2';
+					}
+					await this.plugin.saveSettings();
+					// 刷新设置页面以更新智能匹配区域的显示
+					this.display();
+				}));
+
+		// 指定展开的第一级标签
+		new Setting(expandConfigContainer)
+			.setName('指定展开的第一级标签')
+			.setDesc('输入要展开的第一级标签名称，多个标签用逗号分隔。留空则展开所有多级标签。例如：前端,后端,数据库')
+			.addText(text => {
+				text.setPlaceholder('前端,后端,数据库')
+					.setValue(this.plugin.settings.expandTagPrefixes)
+					.onChange(async (value) => {
+						this.plugin.settings.expandTagPrefixes = value;
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.style.width = '100%';
+			});
+
+		// 立即展开按钮
+		new Setting(expandConfigContainer)
+			.setName('多级标签自动展开功能')
+			.setDesc('点击后将自动扫描库中的多级标签并转化为组集和标签组')
+			.addButton(btn => btn
+				.setButtonText('立即展开')
+				.setCta()
+				.onClick(async () => {
+					await this.plugin.convertMultiLevelTagsToGroups();
+					this.display();
+				}));
+
+		// 2.3 Auto Add Rules
+		const autoAddSection = section.createDiv('tgm-auto-add-section');
+		autoAddSection.style.border = '1px solid var(--background-modifier-border)';
+		autoAddSection.style.borderRadius = '6px';
+		autoAddSection.style.padding = '16px';
+		autoAddSection.style.marginBottom = '20px';
+		autoAddSection.style.backgroundColor = 'var(--background-secondary)';
+		
+		new Setting(autoAddSection)
+			.setName(i18n.t('multiLevelAdaptation.autoAddTags') || '自动添加标签至标签组')
+			.setDesc(i18n.t('multiLevelAdaptation.autoAddTagsDesc') || '根据关键字或正则表达式,扫描未被划分到标签组的标签,自动将相关标签添加至目标标签组')
+			.setHeading();
+
+		// Rules List
+		const rulesList = autoAddSection.createDiv('tgm-rules-list');
+		rulesList.style.marginBottom = '12px';
+		
+		const updateRulesList = () => {
+			rulesList.empty();
+			const rules = this.plugin.settings.autoAddRules.split(';').filter(r => r.trim().length > 0);
+			
+			if (rules.length > 0) {
+				rules.forEach(rule => {
+					const ruleEl = rulesList.createDiv('tgm-rule-item');
+					ruleEl.style.display = 'flex';
+					ruleEl.style.alignItems = 'center';
+					ruleEl.style.justifyContent = 'space-between';
+					ruleEl.style.padding = '6px 10px';
+					ruleEl.style.marginBottom = '6px';
+					ruleEl.style.backgroundColor = 'var(--background-primary)';
+					ruleEl.style.borderRadius = '4px';
+					ruleEl.style.border = '1px solid var(--background-modifier-border)';
+					
+					const [pattern, group] = rule.split(':');
+					const textSpan = ruleEl.createSpan({ text: `${pattern} → ${group}` });
+					textSpan.style.flex = '1';
+					textSpan.style.fontSize = '0.9em';
+					
+					const deleteBtn = ruleEl.createEl('button', { text: '×' });
+					deleteBtn.style.padding = '2px 8px';
+					deleteBtn.style.cursor = 'pointer';
+					deleteBtn.style.border = 'none';
+					deleteBtn.style.background = 'transparent';
+					deleteBtn.style.color = 'var(--text-muted)';
+					deleteBtn.style.fontSize = '1.2em';
+					deleteBtn.onmouseenter = () => deleteBtn.style.color = 'var(--text-error)';
+					deleteBtn.onmouseleave = () => deleteBtn.style.color = 'var(--text-muted)';
+					deleteBtn.onclick = async () => {
+						const newRules = rules.filter(r => r !== rule).join(';');
+						this.plugin.settings.autoAddRules = newRules;
+						await this.plugin.saveSettings();
+						updateRulesList();
+					};
+				});
+			}
+		};
+		updateRulesList();
+
+		// Add Rule UI - Compact layout
+		const addRuleContainer = autoAddSection.createDiv('tgm-add-rule-container');
+		addRuleContainer.style.display = 'grid';
+		addRuleContainer.style.gridTemplateColumns = '1fr 1fr auto';
+		addRuleContainer.style.gap = '8px';
+		addRuleContainer.style.marginBottom = '16px';
+		addRuleContainer.style.alignItems = 'center';
+
+		const patternInput = addRuleContainer.createEl('input', {
+			type: 'text',
+			placeholder: i18n.t('multiLevelAdaptation.rulePlaceholder') || '关键字或正则表达式'
+		});
+		patternInput.style.width = '100%';
+		patternInput.style.padding = '6px 10px';
+		
+		// Add Datalist for suggestions
+		const dataListId = 'tgm-group-suggestions';
+		const dataList = addRuleContainer.createEl('datalist', { attr: { id: dataListId } });
+		this.plugin.settings.tagGroups.forEach(g => {
+			dataList.createEl('option', { attr: { value: g.name } });
+		});
+
+		const groupInput = addRuleContainer.createEl('input', {
+			type: 'text',
+			placeholder: i18n.t('multiLevelAdaptation.targetGroupPlaceholder') || '目标标签组名称'
+		});
+		groupInput.setAttribute('list', dataListId);
+		groupInput.style.width = '100%';
+		groupInput.style.padding = '6px 10px';
+		
+		const addRuleBtn = addRuleContainer.createEl('button', {
+			text: i18n.t('multiLevelAdaptation.addRule') || '添加规则'
+		});
+		addRuleBtn.style.padding = '6px 16px';
+		addRuleBtn.style.whiteSpace = 'nowrap';
+
+		addRuleBtn.onclick = async () => {
+			const p = patternInput.value.trim();
+			const g = groupInput.value.trim();
+			if (p && g) {
+				const newRule = `${p}:${g}`;
+				const currentRules = this.plugin.settings.autoAddRules.split(';').filter(r => r.trim().length > 0);
+				if (!currentRules.includes(newRule)) {
+					currentRules.push(newRule);
+					this.plugin.settings.autoAddRules = currentRules.join(';');
+					await this.plugin.saveSettings();
+					updateRulesList();
+					patternInput.value = '';
+					groupInput.value = '';
+				}
+			}
+		};
+
+		// Bottom controls in one row
+		const controlsContainer = autoAddSection.createDiv();
+		controlsContainer.style.display = 'flex';
+		controlsContainer.style.gap = '20px';
+		controlsContainer.style.alignItems = 'center';
+		controlsContainer.style.justifyContent = 'space-between';
+		controlsContainer.style.paddingTop = '12px';
+		controlsContainer.style.marginTop = '12px';
+		controlsContainer.style.borderTop = '1px solid var(--background-modifier-border)';
+		
+		// Run Now Button (no label, just button)
+		const runNowSetting = new Setting(controlsContainer)
+			.addButton(btn => btn
+				.setButtonText(i18n.t('multiLevelAdaptation.runAutoAdd') || '立即刷新')
+				.onClick(async () => {
+					const count = await this.plugin.autoScanTagsToGroups();
+					new Notice(i18n.t('messages.scanComplete').replace('{count}', count.toString()));
+					this.display();
+				}));
+		runNowSetting.settingEl.style.border = 'none';
+		runNowSetting.settingEl.style.padding = '0';
+		runNowSetting.settingEl.style.justifyContent = 'flex-start';
+
+		// Auto run on startup toggle
+		const autoRunSetting = new Setting(controlsContainer)
+			.setName(i18n.t('multiLevelAdaptation.autoAddOnStartup') || '启动时自动运行')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.autoAddTags)
+				.onChange(async (value) => {
+					this.plugin.settings.autoAddTags = value;
+					await this.plugin.saveSettings();
+				}));
+		autoRunSetting.settingEl.style.border = 'none';
+		autoRunSetting.settingEl.style.padding = '0';
+
+		// 多级标签智能匹配配置
+		const smartMatchSection = section.createDiv('tgm-smart-match-section');
+		smartMatchSection.style.border = '1px solid var(--background-modifier-border)';
+		smartMatchSection.style.borderRadius = '6px';
+		smartMatchSection.style.padding = '16px';
+		smartMatchSection.style.marginTop = '20px';
+		smartMatchSection.style.backgroundColor = 'var(--background-secondary)';
+
+		new Setting(smartMatchSection)
+			.setName(i18n.t('multiLevelAdaptation.smartMatch.title') || '多级标签智能匹配')
+			.setDesc(i18n.t('multiLevelAdaptation.smartMatch.desc') || '配合多级标签展开功能使用,自动将新出现的多级标签添加到对应的标签组中(仅处理未被添加的标签)')
+			.setHeading();
+
+		// 启用智能匹配
+		new Setting(smartMatchSection)
+			.setName(i18n.t('multiLevelAdaptation.smartMatch.enabled') || '启用智能匹配')
+			.setDesc(i18n.t('multiLevelAdaptation.smartMatch.enabledDesc') || '启用后,新出现的多级标签将自动按层级匹配到对应的标签组')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.multiLevelAutoAdd.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.multiLevelAutoAdd.enabled = value;
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		if (this.plugin.settings.multiLevelAutoAdd.enabled) {
+			// 当前匹配模式显示
+			const modeContainer = smartMatchSection.createDiv('tgm-mode-container');
+			modeContainer.style.marginTop = '10px';
+			modeContainer.style.padding = '12px';
+			modeContainer.style.backgroundColor = 'var(--background-primary)';
+			modeContainer.style.borderRadius = '4px';
+			modeContainer.style.border = '1px solid var(--background-modifier-border)';
+			
+			const currentMode = this.plugin.settings.multiLevelAutoAdd.matchMode;
+			const expandDepth = this.plugin.settings.expandDepth;
+			
+			const modeTitle = modeContainer.createEl('div', { 
+				text: i18n.t('multiLevelAdaptation.smartMatch.currentMode') || '当前匹配模式',
+				cls: 'setting-item-name'
+			});
+			modeTitle.style.fontWeight = '600';
+			modeTitle.style.marginBottom = '8px';
+			
+			const modeDesc = modeContainer.createEl('div');
+			modeDesc.style.fontSize = '0.9em';
+			modeDesc.style.color = 'var(--text-muted)';
+			
+			if (currentMode === 'level1') {
+				modeDesc.innerHTML = `
+					<div style="margin-bottom: 4px;">✓ <strong>level1模式</strong> - 按第一级匹配(适配${expandDepth}级展开)</div>
+					<div style="margin-left: 16px; color: var(--text-faint);">示例: #前端/框架/React → 匹配"前端"组</div>
+				`;
+			} else {
+				modeDesc.innerHTML = `
+					<div style="margin-bottom: 4px;">✓ <strong>level2模式</strong> - 按第二级匹配(适配${expandDepth}级展开)</div>
+					<div style="margin-left: 16px; color: var(--text-faint);">示例: #前端/框架/React → 匹配"框架"组</div>
+				`;
+			}
+			
+			const modeNote = modeContainer.createEl('div');
+			modeNote.style.marginTop = '8px';
+			modeNote.style.fontSize = '0.85em';
+			modeNote.style.color = 'var(--text-muted)';
+			modeNote.style.fontStyle = 'italic';
+			modeNote.textContent = i18n.t('multiLevelAdaptation.smartMatch.modeNote') || '匹配模式根据展开深度自动设置,找不到匹配的标签组时不会添加';
+
+			// 自动创建标签组选项
+			new Setting(smartMatchSection)
+				.setName(i18n.t('multiLevelAdaptation.smartMatch.createIfNotExists') || '自动创建标签组')
+				.setDesc(i18n.t('multiLevelAdaptation.smartMatch.createIfNotExistsDesc') || '如果匹配的标签组不存在，是否自动创建（暂未实现）')
+				.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.multiLevelAutoAdd.createIfNotExists)
+					.setDisabled(true) // 暂时禁用，未来版本实现
+					.onChange(async (value) => {
+						this.plugin.settings.multiLevelAutoAdd.createIfNotExists = value;
+						await this.plugin.saveSettings();
+					}));
+		}
+
+	}
+
 	// 渲染颜色设置区域
 	renderColorSettings(containerEl: HTMLElement): void {
 		const colorSection = containerEl.createDiv('settings-section');
+		new Setting(colorSection).setName(i18n.t('settings.tagColors')).setHeading();
+
+		// Text Tag Styling (Moved here)
+		new Setting(colorSection)
+			.setName(i18n.t('settings.tagColors') || '标签颜色管理')
+			.setDesc(i18n.t('multiLevelAdaptation.enableStylingDesc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableTextTagStyling)
+				.onChange(async (value) => {
+					this.plugin.settings.enableTextTagStyling = value;
+					await this.plugin.saveSettings();
+					this.plugin.applyTextTagStyling();
+				}));
 		new Setting(colorSection).setName(i18n.t('settings.colorSettings') || '颜色设置').setHeading();
 
 		// 添加自定义颜色功能开关
@@ -1543,6 +2625,124 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		}
 	}
 
+	// 渲染全局标签重命名设置区域
+	renderRenameSettings(containerEl: HTMLElement): void {
+		const renameSection = containerEl.createDiv('settings-section');
+		renameSection.style.padding = '20px';
+		renameSection.style.marginBottom = '20px';
+		
+		// 标题
+		new Setting(renameSection)
+			.setName(i18n.t('rename.sectionTitle'))
+			.setHeading();
+
+		// 警告提示 - 更紧凑的样式
+		const warningText = i18n.t('rename.warning');
+		
+		const warningEl = renameSection.createDiv('tgm-rename-warning');
+		warningEl.style.padding = '8px 12px';
+		warningEl.style.marginBottom = '16px';
+		warningEl.style.backgroundColor = 'rgba(255, 100, 100, 0.15)';
+		warningEl.style.border = '1px solid rgba(255, 100, 100, 0.3)';
+		warningEl.style.borderRadius = '6px';
+		warningEl.style.fontSize = '0.9em';
+		warningEl.style.color = 'var(--text-normal)';
+		warningEl.style.display = 'flex';
+		warningEl.style.alignItems = 'center';
+		warningEl.style.gap = '8px';
+		
+		const iconSpan = warningEl.createSpan();
+		iconSpan.setText('⚠️');
+		iconSpan.style.fontSize = '1.2em';
+		
+		const textSpan = warningEl.createSpan();
+		textSpan.setText(warningText);
+		textSpan.style.flex = '1';
+
+		let oldTag = '';
+		let newTag = '';
+		let includeCanvas = false;
+		let oldTagInput: TextComponent;
+		let newTagInput: TextComponent;
+
+		// 输入区域容器 - 使用flex布局使其更紧凑
+		const inputContainer = renameSection.createDiv('tgm-rename-inputs');
+		inputContainer.style.display = 'flex';
+		inputContainer.style.gap = '12px';
+		inputContainer.style.marginBottom = '12px';
+		inputContainer.style.flexWrap = 'wrap';
+
+		// 旧标签名输入
+		const oldTagContainer = inputContainer.createDiv();
+		oldTagContainer.style.flex = '1';
+		oldTagContainer.style.minWidth = '200px';
+		new Setting(oldTagContainer)
+			.setName(i18n.t('rename.oldTagName'))
+			.setDesc(i18n.t('rename.oldTagNameDesc'))
+			.addText(text => {
+				oldTagInput = text;
+				text.setPlaceholder(i18n.t('rename.oldTagName'))
+					.onChange(async (value) => {
+						oldTag = value;
+					});
+			});
+
+		// 新标签名输入
+		const newTagContainer = inputContainer.createDiv();
+		newTagContainer.style.flex = '1';
+		newTagContainer.style.minWidth = '200px';
+		new Setting(newTagContainer)
+			.setName(i18n.t('rename.newTagName'))
+			.setDesc(i18n.t('rename.newTagNameDesc'))
+			.addText(text => {
+				newTagInput = text;
+				text.setPlaceholder(i18n.t('rename.newTagName'))
+					.onChange(async (value) => {
+						newTag = value;
+					});
+			});
+
+		// Canvas选项和按钮容器 - 放在同一行
+		const actionContainer = renameSection.createDiv('tgm-rename-actions');
+		actionContainer.style.display = 'flex';
+		actionContainer.style.alignItems = 'center';
+		actionContainer.style.gap = '16px';
+		actionContainer.style.marginTop = '12px';
+
+		// Canvas选项
+		const canvasToggleContainer = actionContainer.createDiv();
+		canvasToggleContainer.style.flex = '1';
+		new Setting(canvasToggleContainer)
+			.setName(i18n.t('rename.includeCanvas'))
+			.setDesc(i18n.t('rename.includeCanvasDesc'))
+			.addToggle(toggle => toggle
+				.setValue(false)
+				.onChange(async (value) => {
+					includeCanvas = value;
+				}));
+
+		// 重命名按钮
+		const buttonContainer = actionContainer.createDiv();
+		new Setting(buttonContainer)
+			.addButton(btn => btn
+				.setButtonText(i18n.t('rename.button'))
+				.setCta()
+				.onClick(async () => {
+					if (!oldTag || !newTag) {
+						new Notice(i18n.t('rename.warning'));
+						return;
+					}
+					// 执行重命名
+					await new TagRenamer(this.app, this.plugin).renameTag(oldTag, newTag, includeCanvas);
+					
+					// 清空输入框
+					oldTagInput.setValue('');
+					newTagInput.setValue('');
+					oldTag = '';
+					newTag = '';
+				}));
+	}
+
 	// 渲染标签组设置区域
 	renderTagGroupSettings(containerEl: HTMLElement): void {
 		const tagGroupSection = containerEl.createDiv('settings-section');
@@ -1587,6 +2787,46 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					new Notice("Failed to save settings.");
 				});
 			});
+
+			// 添加批量设置颜色按钮（仅在启用自定义颜色时显示）
+			if (this.plugin.settings.enableCustomColors) {
+				const setGroupColorBtn = groupHeaderContainer.createEl('button', {
+					text: '🎨',
+					cls: 'tgm-set-group-color-btn'
+				});
+				setGroupColorBtn.setAttribute('aria-label', i18n.t('settings.setGroupColor'));
+
+				setGroupColorBtn.onclick = () => {
+					// 确保customColors已初始化
+					if (!this.plugin.settings.customColors || !Array.isArray(this.plugin.settings.customColors) || this.plugin.settings.customColors.length !== 7) {
+						this.plugin.settings.customColors = ['', '', '', '', '', '', ''];
+					}
+
+					// 打开颜色选择器
+					new ColorPickerModal(this.app, this.plugin, '', (color) => {
+						if (!color) {
+							new Notice(i18n.t('settings.pleaseSelectColor'));
+							return;
+						}
+
+						// 为该组的所有标签设置颜色
+						const tagCount = group.tags.length;
+						group.tags.forEach(tag => {
+							this.plugin.settings.tagColors[tag] = color;
+						});
+
+						void this.plugin.saveSettings().then(() => {
+							// 显示成功消息
+							const message = i18n.t('settings.groupColorApplied')
+								.replace('{count}', tagCount.toString())
+								.replace('{groupName}', group.name);
+							new Notice(message);
+							// 刷新显示
+							this.display();
+						});
+					}).open();
+				};
+			}
 
 			const deleteGroupBtn = groupHeaderContainer.createEl('button', {
 				text: i18n.t('settings.deleteGroup'),
@@ -1658,14 +2898,20 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 				// 检查是否为嵌套标签并添加图标
 				let displayText = `#${tag}`;
-				if (tag.includes('/')) {
-					displayText = `📁 #${tag}`;
+				const isMultiLevelTag = tag.includes('/');
+				
+				if (isMultiLevelTag) {
+					// 添加lucide tags图标
+					const iconEl = tagText.createSpan('tgm-tag-icon');
+					setIcon(iconEl, 'tags');
+					displayText = ` #${tag}`;
 					tagText.addClass('nested-tag');
 				}
 
-				tagText.setText(displayText);
+				tagText.appendText(displayText);
 
-				// 使用Obsidian原生的tooltip系统，设置在整个标签项上
+				// 设置 Tooltip - 所有标签都显示 tooltip
+				// 在设置页面中，tooltip 可以帮助用户更清晰地看到完整路径
 				tagEl.setAttribute('aria-label', `#${tag}`);
 
 				// 添加点击事件打开颜色选择器
@@ -1836,14 +3082,19 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 								// 检查是否为嵌套标签并添加图标
 								let displayText = tag;
-								if (tag.includes('/')) {
-									displayText = `📁 ${tag}`;
+								const isMultiLevelTag = tag.includes('/');
+								
+								if (isMultiLevelTag) {
+									// 添加lucide tags图标
+									const iconEl = tagTextEl.createSpan('tgm-tag-icon');
+									setIcon(iconEl, 'tags');
+									displayText = ` ${tag}`;
 									tagTextEl.addClass('nested-tag');
 								}
 
-								tagTextEl.setText(displayText);
+								tagTextEl.appendText(displayText);
 
-								// 使用Obsidian原生的tooltip系统，设置在整个标签项上
+								// 设置 Tooltip - 所有标签都显示 tooltip
 								tagEl.setAttribute('aria-label', tag);
 
 								// 默认选中所有筛选出的标签
@@ -1997,14 +3248,19 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 							// 检查是否为嵌套标签并添加图标
 							let displayText = tag;
-							if (tag.includes('/')) {
-								displayText = `📁 ${tag}`;
+							const isMultiLevelTag = tag.includes('/');
+							
+							if (isMultiLevelTag) {
+								// 添加lucide tags图标
+								const iconEl = tagTextEl.createSpan('tgm-tag-icon');
+								setIcon(iconEl, 'tags');
+								displayText = ` ${tag}`;
 								tagTextEl.addClass('nested-tag');
 							}
 
-							tagTextEl.setText(displayText);
+							tagTextEl.appendText(displayText);
 
-							// 使用Obsidian原生的tooltip系统，设置在整个标签项上
+							// 设置 Tooltip - 所有标签都显示 tooltip
 							tagEl.setAttribute('aria-label', tag);
 
 							tagEl.addEventListener('click', () => {
@@ -2303,7 +3559,7 @@ class TagGroupView extends ItemView {
 	plugin: TagGroupManagerPlugin;
 	private groupSortable: Sortable;
 	private tagSortables: Sortable[] = [];
-	private isInsertMode: boolean = false;
+	public isInsertMode: boolean = false; // Changed to public to allow access from HierarchyBoard
 
 	constructor(leaf: WorkspaceLeaf, plugin: TagGroupManagerPlugin) {
 		super(leaf);
@@ -2444,8 +3700,13 @@ class TagGroupView extends ItemView {
 			// 创建标签容器
 			const tagsContainer = groupEl.createDiv('tags-view-container');
 
+			// 过滤掉自动展开的叶子节点（末节点）- 这些节点只在设置页面显示
+			// 手动添加的标签不会被过滤
+			const minDepth = getGroupExpandDepth(group, this.plugin.settings.tagGroupSets);
+			const filteredTags = group.tags.filter(tag => !shouldHideTag(tag, group.tags, group.autoExpandedTags, minDepth));
+
 			// 渲染标签
-			group.tags.forEach(tag => {
+			filteredTags.forEach(tag => {
 
 				const tagEl = tagsContainer.createDiv('tgm-tag-item');
 				tagEl.setAttribute('data-tag', tag);
@@ -2455,15 +3716,54 @@ class TagGroupView extends ItemView {
 
 				// 检查是否为嵌套标签并添加图标
 				let displayText = tag;
-				if (tag.includes('/')) {
-					displayText = `📁 ${tag}`;
+				const isMultiLevelTag = tag.includes('/');
+				
+				if (isMultiLevelTag) {
+					// 添加lucide tags图标
+					const iconEl = tagTextEl.createSpan('tgm-tag-icon');
+					setIcon(iconEl, 'tags');
+					// Show shortened name (leaf)
+					displayText = ` ${tag.split('/').pop()}`;
 					tagTextEl.addClass('nested-tag');
 				}
 
-				tagTextEl.setText(displayText);
+				tagTextEl.appendText(displayText);
 
-				// 使用Obsidian原生的tooltip系统，设置在整个标签项上
-				tagEl.setAttribute('aria-label', tag);
+				// Add Hierarchy Board Trigger - 仅用于多级标签
+				if (isMultiLevelTag) {
+					const triggerEl = tagEl.createDiv('tgm-hierarchy-trigger');
+					triggerEl.setText('>>');
+					triggerEl.removeAttribute('aria-label');
+
+					// Hover to show (ephemeral)
+					triggerEl.addEventListener('mouseenter', (e) => {
+						const rect = triggerEl.getBoundingClientRect();
+						this.plugin.hierarchyBoard.show(tag, rect, false, this); // false = not pinned
+					});
+
+					triggerEl.addEventListener('mouseleave', (e) => {
+						this.plugin.hierarchyBoard.hide(200);
+					});
+
+					triggerEl.addEventListener('mousedown', (e) => {
+						e.stopPropagation();
+					});
+
+					// Click to PIN
+					triggerEl.addEventListener('click', (e) => {
+						e.stopPropagation();
+						e.stopImmediatePropagation();
+						e.preventDefault();
+						const rect = triggerEl.getBoundingClientRect();
+						this.plugin.hierarchyBoard.show(tag, rect, true, this); // true = pinned
+					});
+				}
+
+				// 设置 Tooltip - 仅用于非多级标签
+				// 多级标签通过 hierarchy board 查看完整路径，不需要 tooltip
+				if (!isMultiLevelTag) {
+					tagTextEl.setAttribute('aria-label', tag);
+				}
 
 				// 应用自定义颜色（如果启用且有匹配的颜色映射）
 				if (this.plugin.settings.enableCustomColors) {
@@ -2937,3 +4237,7 @@ class TagGroupView extends ItemView {
 		return Promise.resolve();
 	}
 }
+
+
+
+

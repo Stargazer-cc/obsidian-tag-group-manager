@@ -74,6 +74,23 @@ export interface I18nStrings {
     tagGroupUpdated: string;
     tagGroupUpToDate: string;
     noMatchingTagGroup: string;
+    invalidTagRename: string;
+    renamingTag: string;
+    renameComplete: string;
+    renameErrors: string;
+  };
+  rename: {
+    commandName: string;
+    title: string;
+    oldTagName: string;
+    oldTagNameDesc: string;
+    newTagName: string;
+    newTagNameDesc: string;
+    button: string;
+    sectionTitle: string;
+    includeCanvas: string;
+    includeCanvasDesc: string;
+    warning: string;
   };
 }
 
@@ -113,10 +130,10 @@ export class I18n {
 
   private getTranslations(): I18nStrings {
     try {
-      return this.currentLocale === 'zh' ? zh : en;
+      return (this.currentLocale === 'zh' ? zh : en) as unknown as I18nStrings;
     } catch (e) {
       console.warn(`Locale ${this.currentLocale} not found, falling back to English`, e);
-      return en;
+      return en as unknown as I18nStrings;
     }
   }
 

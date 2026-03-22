@@ -1,63 +1,35 @@
-# Tag Group Manager
+<h1 align="center">Obsidian Tag Group Manager</h1>
 
-![GitHub all releases](https://img.shields.io/github/downloads/stargazer-cc/obsidian-tag-group-manager/total?color=success)
+<div align="center">
 
-- [中文](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/README.md)
+![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=%23483699&label=downloads&query=%24%5B%22tag-group-manager%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json)
+![GitHub release](https://img.shields.io/github/v/release/stargazer-cc/obsidian-tag-group-manager?color=blue)
+![GitHub stars](https://img.shields.io/github/stars/stargazer-cc/obsidian-tag-group-manager?style=flat&color=yellow)
+![License](https://img.shields.io/github/license/stargazer-cc/obsidian-tag-group-manager?color=green)
 
-- For more detailed introduction, [visit Obsidian Forum](https://forum.obsidian.md)
+English | [中文](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/README.md)
 
-## Introduction
+</div>
 
-Tag Group Manager is a plugin designed for Obsidian that helps manage and quickly insert tags. It allows users to create custom tag groups and quickly insert tags into notes through a floating window, improving the efficiency of note organization and classification.
+Tag Group Manager is a tag management enhancement plugin for [Obsidian](https://obsidian.md/), providing tag group management, quick tag insertion, custom tag colors, and powerful tag organization features to improve note organization and classification efficiency.
+
+For more detailed introduction, please visit [Obsidian Forum](https://forum.obsidian.md)
 
 ![image](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/dev/%E5%BC%80%E5%90%AF%E9%A2%9C%E8%89%B2%E8%AE%BE%E7%BD%AE.png)
 
 
-## Features
+## ✨ Features
 
-- **Tag Group Management**: Create, edit, and delete custom tag groups
-  - Support manual tag addition, meaning the same tag can be added to different groups
-  - Support adding from existing tags in your vault with filtering functionality, avoiding duplicates
-  - Support batch filtering to add multiple tags to groups at once, activated buttons turn green and display "Confirm Selection" to clearly indicate current state
-
-- **Tag Group Sets**: Organize multiple tag groups into sets for easy context switching
-  - **One-Click Switching**: Quickly switch between different sets via the button below group names in the overview view
-  - **Independent Sorting**: Each set has its own independent tag group order
-  - **Flexible Management**: Create, edit, and delete sets with custom names and icons (Lucide)
-
-- **Floating Tag Selector**: Draggable and pinnable tag selection interface
-  - **One-to-one correspondence between tag groups and floating selectors**: Each new tag group registers a floating selector generation command
-  - **Quick Tag Insertion**: Quickly call the tag selector through the command palette or hotkeys for insertion
-  - **Auto-dimming After Use**: Used tags switch to a different state to avoid duplicate additions, this process can be reset and cycled
-
-- **Tag Overview View**: Functional integration center in the right sidebar
-  - **Insertion Mode Switching**: Switch between sorting/insertion modes by clicking any tag group name
-    - **Sorting Mode**: Supports drag-and-drop sorting of tag groups and cross-group tag sorting, drag handles appear above tag group names
-    - **Insertion Mode**: Click to directly insert tags
-  - **Set Switching**: Switch between different tag group sets by clicking the icon button below any tag group set name
-    - **Tag Group Sorting**: Supports drag-and-drop sorting of tag groups and cross-group tag sorting, drag handles appear above tag group names
-
-- **Comprehensive Tag Insertion Support**
-  - **Source Code YAML Area**: YAML frontmatter in both Source Mode and Live Preview
-  - **Live Preview or Reading Mode Properties Panel**: Click to insert directly into the graphical tags property value without switching to source mode
-  - **Canvas Support**: Insert tags directly into Canvas cards and embedded notes
-  - **Search Box**: Support inserting tags directly into various Obsidian search boxes
-  - **Other Plugin Support**: Support inserting tags into input boxes or editor areas of other plugins
-
-- **Custom Tag Colors**: Set personalized colors for tags
-  - **Color Settings Master Switch**: One-click enable/disable tag color functionality without affecting saved configurations
-  - **Single Tag Color Settings**: Left-click tags in the tag group settings on the settings page to open color settings popup
-    - **Seven Preset Colors**: Provides seven rainbow directory-style preset colors (Red, Blue, Green, Orange, Purple, Cyan, Pink)
-    - **Custom Colors**: Support adding custom colors to color slots, automatically saves last 7 colors used
-  - **Batch Color Settings**: Independent settings area supporting string and regex pattern matching
-  - **Unified Visual Style**: When enabled, all tags apply soft gradient background styles
-
-- **Multi-language Support**: Automatically detects Obsidian language settings
-  - Chinese interface for Chinese users
-  - English interface for other language users
-
-- **Quick Clear All Tags**
-  - Available in the right-click menu when a note is selected
+- 📁 **Tag Group Management** - Create, edit, and delete custom tag groups with manual addition, vault filtering, and batch import
+- 📚 **Tag Group Sets** - Organize multiple tag groups into sets for one-click context switching with independent sorting
+- 🎯 **Floating Tag Selector** - Draggable, pinnable tag selection interface accessible via command palette or hotkeys, with auto-dimming for used tags
+- 📊 **Tag Overview View** - Right sidebar hub with sorting/insertion mode toggle, drag-and-drop reordering, and cross-group sorting
+- 🔌 **Universal Insertion Support** - Works in YAML areas, properties panel, Canvas, search boxes, and other plugin input fields
+- 🎨 **Custom Tag Colors** - Seven preset colors plus custom color picker, with single-tag and batch regex pattern matching, tag styles imitate Obsidian property tags
+- 🏷️ **Multi-Level Tag Adaptation** - Support 2-level and 3-level expand modes, smart matching auto-add, flexible rule-based configuration [📖 Detailed Guide](docs/Multi-Level-Tag-Adaptation-Guide.md)
+- 🔖 **Tag Renaming** - Vault-wide tag renaming with automatic updates across all notes and Canvas files
+- 🌍 **Multi-language Support** - Auto-detects Obsidian language settings for Chinese and English interfaces
+- 🧹 **Quick Clear Tags** - Right-click menu option to remove all tags from a note instantly
 
   
 
@@ -99,12 +71,14 @@ Simply search for "Tag Group Manager" in Obsidian's plugin marketplace and click
 ### Setting Tag Colors
 
 1. **Single Tag Color Settings**: Left-click tags in the tag group settings on the settings page to open color settings popup.
-2. **Batch Color Settings**: In the independent settings area on the settings page, apply or clear colors for tags that meet conditions through normal matching or conditional matching.
-3. **Color Selection Popup**: Both color setting methods share the color selection popup, click OK after selecting a color.
+2. **Batch Group Color Settings**: Click the palette icon next to the tag group name in the tag group configuration area to configure.
+3. **Batch Color Settings**: In the independent settings area on the settings page, apply or clear colors for tags that meet conditions through normal matching or conditional matching.
+4. **Color Selection Popup**: All color setting methods share the color selection popup, click OK after selecting a color.
      **Preset Colors**: Provides seven rainbow-style preset colors (Red, Blue, Green, Orange, Purple, Cyan, Pink), click to apply.
      **Custom Colors**
        **Auto Save**: After entering a color value, click the apply color button to apply the color, automatically saves the last 7 colors used, cycling from left to right.
        **Manual Save**: After completing color input, left-click a slot to add, right-click a slot to delete, best to save to the rightmost slot first to prevent auto-save overwriting.
+5. **Apply Colors to Inline Tags**: In the color management settings area, you can set whether to apply tag colors from the plugin to inline tags in content.
 
 Notes:
 1. If you want custom colors to be more harmonious and beautiful, avoid using colors that are too dull.
@@ -120,15 +94,129 @@ Notes:
 4. **Cycle Use**: Click the cycle button in the upper left corner of the tag selector to cycle through the current tag group's tags.
 5. **Refresh**: When new tags are added to a tag group, Shift + click the cycle button in the upper right corner of the tag selector to refresh the current tag group's tags.
 
+- **Multi-level Tag Filtered Display**: All multi-level tags are simplified to single-level leaf nodes; all tags have "manually added" and "auto-added" attributes. When multi-level tags have the "auto-added" attribute (captured through expansion feature), the tag group display page only renders nodes with children, hiding others. When multi-level tags have the "manually added" attribute (captured through manual tag group editing), leaf nodes without children can be displayed; two-level tags are not hidden.
+- **Multi-level Tag Hierarchy Panel**: Hovering over the <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-tags-icon lucide-tags"><path d="M13.172 2a2 2 0 0 1 1.414.586l6.71 6.71a2.4 2.4 0 0 1 0 3.408l-4.592 4.592a2.4 2.4 0 0 1-3.408 0l-6.71-6.71A2 2 0 0 1 6 9.172V3a1 1 0 0 1 1-1z"/><path d="M2 7v6.172a2 2 0 0 0 .586 1.414l6.71 6.71a2.4 2.4 0 0 0 3.191.193"/><circle cx="10.5" cy="6.5" r=".5" fill="currentColor"/></svg> icon at the end of multi-level tags will activate this panel, which displays the child distribution of the current multi-level tag, and all nodes can be clicked to insert.
+
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/3.gif)
 
 ### Tag Overview View
-- **Launch**: Click the star icon in the left sidebar to activate this view
-- **Switch Modes**: Click any tag group name to switch between sorting/insertion modes. In sorting mode, drag any tag to sort, drag the drag handle to sort tag groups.
-- **Switch Set Display**: Click the icon button below any tag group name to select the set to switch to, default is overview.
-- **Refresh**: When new tags are added to a tag group, click any tag group name to refresh the current tag group's tags.
+
+1. **Launch**: Click the star icon in the left sidebar to activate this view
+2. **Switch Modes**: Click any tag group name to switch between sorting/insertion modes. In sorting mode, drag any tag to sort, drag the drag handle to sort tag groups.
+3. **Switch Set Display**: Click the icon button below any tag group name to select the set to switch to, default is overview.
+4. **Refresh**: When new tags are added to a tag group, click any tag group name to refresh the current tag group's tags.
+
+- **Multi-level Tag Filtered Display**: All multi-level tags are simplified to single-level leaf nodes; all tags have "manually added" and "auto-added" attributes. When multi-level tags have the "auto-added" attribute (captured through expansion feature), the tag group display page only renders nodes with children, hiding others. When multi-level tags have the "manually added" attribute (captured through manual tag group editing), leaf nodes without children can be displayed; two-level tags are not hidden.
+- **Multi-level Tag Hierarchy Panel**: Hovering over the <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-tags-icon lucide-tags"><path d="M13.172 2a2 2 0 0 1 1.414.586l6.71 6.71a2.4 2.4 0 0 1 0 3.408l-4.592 4.592a2.4 2.4 0 0 1-3.408 0l-6.71-6.71A2 2 0 0 1 6 9.172V3a1 1 0 0 1 1-1z"/><path d="M2 7v6.172a2 2 0 0 0 .586 1.414l6.71 6.71a2.4 2.4 0 0 0 3.191.193"/><circle cx="10.5" cy="6.5" r=".5" fill="currentColor"/></svg> icon at the end of multi-level tags will activate this panel, which displays the child distribution of the current multi-level tag, and all nodes can be clicked to insert.
 
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/6.gif)
+
+### Multi-level Tag Expansion Feature
+
+#### Feature Overview
+The multi-level tag expansion feature can automatically expand multi-level tags (e.g., `frontend/framework/React`) in your vault into tag groups and sets, greatly simplifying multi-level tag management.
+
+#### Expansion Depth Selection
+
+**3-level Expansion (Default):**
+- Structure: `A/B/C/D/E` → Set=A, Group=B, Tags=C, C/D, C/D/E
+- Use case: When you need sets to organize many tag groups
+- Example:
+  ```
+  #frontend/framework/React/Hooks/useState
+  → Set "frontend"
+    → Group "framework"
+      → Tags "React", "React/Hooks", "React/Hooks/useState"
+  ```
+- Special handling: Two-level tags (e.g., `frontend/React`) create groups directly without sets
+
+**2-level Expansion:**
+- Structure: `A/B/C/D` → Group=A, Tags=B, B/C, B/C/D
+- Use case: When you have fewer tag categories and don't need sets
+- Example:
+  ```
+  #framework/React/Hooks/useState
+  → Group "framework"
+    → Tags "React", "React/Hooks", "React/Hooks/useState"
+  ```
+
+#### Selective Expansion
+- Enter tags to expand in the "Specify first-level tags to expand" input box
+- Separate multiple tags with commas, e.g., `frontend,backend,database`
+- Leave empty to expand all multi-level tags
+
+#### Smart Display Strategy
+- **Settings page**: Show all tags, allow color settings for all tags
+- **Selector/Overview**: Hide auto-expanded deep leaf nodes for clean interface
+- **Hover board**: Show complete tree structure with access to all nodes
+
+#### Naming Conflict Prevention
+- If set or group name already exists, auto-add number suffix (e.g., `frontend (1)`)
+- Support safe re-expansion without breaking existing configuration
+
+#### Respect User Actions
+- Manually added tags always visible
+- Manually deleted tags won't be re-added
+- Preserve user's tag order
+
+#### Usage Steps
+1. Open plugin settings page
+2. Find "Multi-level Tag Adaptation" section
+3. Select expansion depth (2-level or 3-level)
+4. (Optional) Enter first-level tags to expand
+5. Click "Expand Now" button
+6. View generated tag groups and sets
+
+For more details: [Multi-Level Tag Adaptation Guide](docs/Multi-Level-Tag-Adaptation-Guide.md)
+
+### Tag Renaming Feature
+
+#### Feature Overview
+Rename tags across your entire vault, automatically updating all references in notes (including YAML frontmatter and content) and Canvas files.
+
+#### Usage
+1. Open command palette (Ctrl/Cmd + P)
+2. Search for "Rename Tag" command
+3. In the popup dialog:
+   - Enter old tag name (without # symbol)
+   - Enter new tag name (without # symbol)
+   - Choose whether to include Canvas files
+4. Click "Rename" button
+5. Wait for processing to complete and check notification message
+
+#### Features
+- **Comprehensive Coverage**: Automatically updates YAML frontmatter, inline tags, and Canvas files
+- **Hierarchy Support**: When renaming parent tags, automatically updates all child tags (e.g., `frontend`→`fe`, then `frontend/React`→`fe/React`)
+- **Sync Updates**: Automatically updates tag group configurations within the plugin
+- **Safe and Reliable**: Checks if tags exist before processing to avoid mistakes
+
+#### Notes
+- Rename operations cannot be undone; backup important data first
+- Large vaults may require longer processing time
+- Check tag group configurations after renaming to ensure correctness
+
+### Auto-add Tags Feature
+
+#### Feature Overview
+Automatically add tags that match rules to corresponding tag groups.
+
+#### Usage
+1. Find "Auto-add Tags to Tag Groups" section in settings
+2. Enable "Auto-add tags" toggle
+3. Set rules in format: `tagname:groupname`, one rule per line
+4. Example rules:
+   ```
+   react:test-frontend-framework
+   vue:test-frontend-framework
+   python:test-backend-language
+   ```
+5. Click "Scan and Add" button, or enable "Auto-scan on startup"
+
+#### Smart Behavior
+- Auto-collect all tags matching rules, including depth>3 tags
+- Distinguish between auto-added and manually added tags
+- Respect user deletion, won't re-add deleted tags
+- Support repeated scanning, only add new tags
 
 
 
@@ -163,40 +251,21 @@ In the plugin settings page, you can:
 
 
 
-## Regular Expression Syntax Guide
+## Regular Expression Support
 
-In batch color settings, you can use regular expressions to match multiple tags. Here are some commonly used regex syntax:
+The plugin supports using regular expressions for batch tag matching and rule configuration. Regular expressions help you:
+- Batch match multiple similar tags
+- Flexibly define tag matching rules
+- Automate tag management workflows
 
-### Basic Syntax
+**Common Examples**:
+- `^work.*` - Match all tags starting with "work"
+- `.*note.*` - Match all tags containing "note"
+- `^(work|study|life)` - Match tags starting with these three words
+- `.*/.*` - Match all multi-level tags
 
-| Syntax | Description | Example | Match Result |
-|--------|-------------|---------|--------------|
-| `.` | Match any single character | `mov.` | move, movie, movi |
-| `*` | Match preceding character 0 or more times | `sci.*` | sci, science, sci-fi |
-| `+` | Match preceding character 1 or more times | `code+` | code, codee |
-| `?` | Match preceding character 0 or 1 time | `books?` | book, books |
-| `^` | Match start of string | `^movie` | movie (but not "old movie") |
-| `$` | Match end of string | `note$` | reading note (but not "notebook") |
-| `\|` | OR operator | `movie\|film` | movie OR film |
-| `[]` | Character set | `[mft]ove` | move, fove, tove |
-| `[^]` | Negated character set | `[^m]ove` | love, dove (but not "move") |
+📖 **Detailed Guide**: [Regular Expression Guide](docs/Regular-Expression-Guide.md)
 
-### Practical Examples
-
-| Need | Regular Expression | Description |
-|------|-------------------|-------------|
-| Match all tags starting with "work" | `^work.*` | e.g.: work, working, workspace |
-| Match all tags containing "note" | `.*note.*` | e.g.: notebook, notes, reading-note |
-| Match "movie" or "film" | `^(movie\|film)$` | Exact match for these two tags |
-| Match all numeric tags | `^\d+$` | e.g.: 2023, 001, 42 |
-| Match tags containing years | `.*20\d{2}.*` | e.g.: 2020, movie2023 |
-| Match nested tags | `.*\/.*` | e.g.: work/project, study/coding |
-| Match specific prefixes | `^(work\|study\|life)` | All tags starting with these words |
-
-### Notes
-
-1. **Escape Characters**: Some special characters need to be escaped with backslash `\`, such as `\.`, `\*`, `\+`, etc.
-2. **Case Sensitivity**: Regular expressions are case-sensitive by default
 
 ## Use Cases
 - Daily tag usage, wanting quick tag insertion
@@ -231,6 +300,12 @@ If you have any questions, suggestions, or feedback, please contact through:
 
 - Submit an Issue on GitHub
 - Send a message through the Obsidian forum
+
+## Acknowledgments
+
+The tag renaming feature in this plugin is inspired by and adapted from the [Tag Wrangler](https://github.com/pjeby/tag-wrangler) plugin. Thanks to @pjeby for their excellent work and open-source contribution.
+
+Tag Wrangler is licensed under the MIT License, which permits free use, modification, and distribution of the code under the terms of the license.
 
 ## License
 
