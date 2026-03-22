@@ -1,6 +1,6 @@
 {
   "name": "tag-group-manager",
-  "version": "1.8.0",
+  "version": "1.8.5",
   "description": "",
   "type": "module",
   "main": "main.js",

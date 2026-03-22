@@ -124,8 +124,11 @@
     "cycleButtonTooltip2": "Cyclic mode: off — click to turn on cyclic mode to restore all tags. Shift+click to update the tag list from the tag group.",
     "tagcounttip": "Used {count} times in vault",
     "invalidTagRename": "Invalid tag rename operation.",
-    "renamingTag": "Renaming #{old} to #{new}...",
+    "renamingTag": "Renaming {old} to {new}...",
     "renameComplete": "Tag renaming complete. Processed {count} files.",
+    "renameNoTagFound": "Tag '{tag}' not found in any files.",
+    "renameCanvasProcessed": "Canvas files processed: {count}",
+    "renameGroupsUpdated": "Tag groups updated: {count}",
     "renameErrors": "Errors occurred in {count} files (check console).",
     "scanComplete": "Scan complete, automatically categorized {count} tags.",
     "cannotInsertInSortMode": "Tag insertion is disabled in Sort Mode. Please disable sorting to switch back to Insert Mode."

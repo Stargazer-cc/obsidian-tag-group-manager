@@ -497,7 +497,7 @@ interface TagGroup {
 
 ## Changelog
 
-### v1.8.0
+### v1.8.5
 - ✨ Added smart multi-level tag matching feature
 - ✨ Support for 2-level and 3-level expand depth
 - ✨ Automatically sets match mode based on expand depth

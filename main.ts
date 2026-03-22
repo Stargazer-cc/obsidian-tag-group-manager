@@ -169,13 +169,13 @@ function getColorClass(colorValue: string): string | null {
 // 隐藏规则：
 // 1. 必须是通过"展开功能"自动添加的标签（在 autoExpandedTags 中）
 // 2. 必须是多级标签（包含 '/'）
-// 3. 深度必须 >= minDepth（3级展开时为3，2级展开时为2）
+// 3. 深度必须 >= 3（二级标签 A/B 永远不隐藏，因为它们是独立的标签组）
 // 4. 在所有标签中，没有其他标签以"该标签/"为前缀（即没有子节点）
 // 
 // 不隐藏的情况：
 // - 手动添加的标签（不在 autoExpandedTags 中）
 // - 非多级标签（如 React）
-// - 深度 < minDepth 的多级标签
+// - 二级标签（A/B 格式，这些是独立的标签组）
 // - 有子节点的多级标签（如 前端/框架/React，且存在 前端/框架/React/Hooks）
 function shouldHideTag(tag: string, allTags: string[], autoExpandedTags?: string[], minDepth: number = 3): boolean {
 	// 如果没有 autoExpandedTags 或标签不在其中，说明是手动添加的，不隐藏
@@ -188,8 +188,15 @@ function shouldHideTag(tag: string, allTags: string[], autoExpandedTags?: string
 		return false;
 	}
 	
-	// 如果深度 < minDepth，不隐藏
+	// 计算标签深度
 	const depth = tag.split('/').length;
+	
+	// 二级标签（A/B）永远不隐藏，因为它们是独立的标签组
+	if (depth === 2) {
+		return false;
+	}
+	
+	// 对于3级及以上的标签，如果深度 < minDepth，不隐藏
 	if (depth < minDepth) {
 		return false;
 	}
@@ -2655,6 +2662,8 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		let oldTag = '';
 		let newTag = '';
 		let includeCanvas = false;
+		let oldTagInput: TextComponent;
+		let newTagInput: TextComponent;
 
 		// 输入区域容器 - 使用flex布局使其更紧凑
 		const inputContainer = renameSection.createDiv('tgm-rename-inputs');
@@ -2670,11 +2679,13 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		new Setting(oldTagContainer)
 			.setName(i18n.t('rename.oldTagName'))
 			.setDesc(i18n.t('rename.oldTagNameDesc'))
-			.addText(text => text
-				.setPlaceholder(i18n.t('rename.oldTagName'))
-				.onChange(async (value) => {
-					oldTag = value;
-				}));
+			.addText(text => {
+				oldTagInput = text;
+				text.setPlaceholder(i18n.t('rename.oldTagName'))
+					.onChange(async (value) => {
+						oldTag = value;
+					});
+			});
 
 		// 新标签名输入
 		const newTagContainer = inputContainer.createDiv();
@@ -2683,11 +2694,13 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		new Setting(newTagContainer)
 			.setName(i18n.t('rename.newTagName'))
 			.setDesc(i18n.t('rename.newTagNameDesc'))
-			.addText(text => text
-				.setPlaceholder(i18n.t('rename.newTagName'))
-				.onChange(async (value) => {
-					newTag = value;
-				}));
+			.addText(text => {
+				newTagInput = text;
+				text.setPlaceholder(i18n.t('rename.newTagName'))
+					.onChange(async (value) => {
+						newTag = value;
+					});
+			});
 
 		// Canvas选项和按钮容器 - 放在同一行
 		const actionContainer = renameSection.createDiv('tgm-rename-actions');
@@ -2719,7 +2732,14 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 						new Notice(i18n.t('rename.warning'));
 						return;
 					}
-					new TagRenamer(this.app, this.plugin).renameTag(oldTag, newTag, includeCanvas);
+					// 执行重命名
+					await new TagRenamer(this.app, this.plugin).renameTag(oldTag, newTag, includeCanvas);
+					
+					// 清空输入框
+					oldTagInput.setValue('');
+					newTagInput.setValue('');
+					oldTag = '';
+					newTag = '';
 				}));
 	}
 

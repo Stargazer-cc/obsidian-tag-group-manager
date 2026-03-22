@@ -71,12 +71,14 @@ Simply search for "Tag Group Manager" in Obsidian's plugin marketplace and click
 ### Setting Tag Colors
 
 1. **Single Tag Color Settings**: Left-click tags in the tag group settings on the settings page to open color settings popup.
-2. **Batch Color Settings**: In the independent settings area on the settings page, apply or clear colors for tags that meet conditions through normal matching or conditional matching.
-3. **Color Selection Popup**: Both color setting methods share the color selection popup, click OK after selecting a color.
+2. **Batch Group Color Settings**: Click the palette icon next to the tag group name in the tag group configuration area to configure.
+3. **Batch Color Settings**: In the independent settings area on the settings page, apply or clear colors for tags that meet conditions through normal matching or conditional matching.
+4. **Color Selection Popup**: All color setting methods share the color selection popup, click OK after selecting a color.
      **Preset Colors**: Provides seven rainbow-style preset colors (Red, Blue, Green, Orange, Purple, Cyan, Pink), click to apply.
      **Custom Colors**
        **Auto Save**: After entering a color value, click the apply color button to apply the color, automatically saves the last 7 colors used, cycling from left to right.
        **Manual Save**: After completing color input, left-click a slot to add, right-click a slot to delete, best to save to the rightmost slot first to prevent auto-save overwriting.
+5. **Apply Colors to Inline Tags**: In the color management settings area, you can set whether to apply tag colors from the plugin to inline tags in content.
 
 Notes:
 1. If you want custom colors to be more harmonious and beautiful, avoid using colors that are too dull.
@@ -92,13 +94,20 @@ Notes:
 4. **Cycle Use**: Click the cycle button in the upper left corner of the tag selector to cycle through the current tag group's tags.
 5. **Refresh**: When new tags are added to a tag group, Shift + click the cycle button in the upper right corner of the tag selector to refresh the current tag group's tags.
 
+- **Multi-level Tag Filtered Display**: All multi-level tags are simplified to single-level leaf nodes; all tags have "manually added" and "auto-added" attributes. When multi-level tags have the "auto-added" attribute (captured through expansion feature), the tag group display page only renders nodes with children, hiding others. When multi-level tags have the "manually added" attribute (captured through manual tag group editing), leaf nodes without children can be displayed; two-level tags are not hidden.
+- **Multi-level Tag Hierarchy Panel**: Hovering over the <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-tags-icon lucide-tags"><path d="M13.172 2a2 2 0 0 1 1.414.586l6.71 6.71a2.4 2.4 0 0 1 0 3.408l-4.592 4.592a2.4 2.4 0 0 1-3.408 0l-6.71-6.71A2 2 0 0 1 6 9.172V3a1 1 0 0 1 1-1z"/><path d="M2 7v6.172a2 2 0 0 0 .586 1.414l6.71 6.71a2.4 2.4 0 0 0 3.191.193"/><circle cx="10.5" cy="6.5" r=".5" fill="currentColor"/></svg> icon at the end of multi-level tags will activate this panel, which displays the child distribution of the current multi-level tag, and all nodes can be clicked to insert.
+
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/3.gif)
 
 ### Tag Overview View
-- **Launch**: Click the star icon in the left sidebar to activate this view
-- **Switch Modes**: Click any tag group name to switch between sorting/insertion modes. In sorting mode, drag any tag to sort, drag the drag handle to sort tag groups.
-- **Switch Set Display**: Click the icon button below any tag group name to select the set to switch to, default is overview.
-- **Refresh**: When new tags are added to a tag group, click any tag group name to refresh the current tag group's tags.
+
+1. **Launch**: Click the star icon in the left sidebar to activate this view
+2. **Switch Modes**: Click any tag group name to switch between sorting/insertion modes. In sorting mode, drag any tag to sort, drag the drag handle to sort tag groups.
+3. **Switch Set Display**: Click the icon button below any tag group name to select the set to switch to, default is overview.
+4. **Refresh**: When new tags are added to a tag group, click any tag group name to refresh the current tag group's tags.
+
+- **Multi-level Tag Filtered Display**: All multi-level tags are simplified to single-level leaf nodes; all tags have "manually added" and "auto-added" attributes. When multi-level tags have the "auto-added" attribute (captured through expansion feature), the tag group display page only renders nodes with children, hiding others. When multi-level tags have the "manually added" attribute (captured through manual tag group editing), leaf nodes without children can be displayed; two-level tags are not hidden.
+- **Multi-level Tag Hierarchy Panel**: Hovering over the <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-tags-icon lucide-tags"><path d="M13.172 2a2 2 0 0 1 1.414.586l6.71 6.71a2.4 2.4 0 0 1 0 3.408l-4.592 4.592a2.4 2.4 0 0 1-3.408 0l-6.71-6.71A2 2 0 0 1 6 9.172V3a1 1 0 0 1 1-1z"/><path d="M2 7v6.172a2 2 0 0 0 .586 1.414l6.71 6.71a2.4 2.4 0 0 0 3.191.193"/><circle cx="10.5" cy="6.5" r=".5" fill="currentColor"/></svg> icon at the end of multi-level tags will activate this panel, which displays the child distribution of the current multi-level tag, and all nodes can be clicked to insert.
 
 ![](https://github.com/Stargazer-cc/obsidian-tag-group-manager/blob/main/6.gif)
 
@@ -155,8 +164,10 @@ The multi-level tag expansion feature can automatically expand multi-level tags 
 2. Find "Multi-level Tag Adaptation" section
 3. Select expansion depth (2-level or 3-level)
 4. (Optional) Enter first-level tags to expand
-5. Click "⚡ Expand Multi-level Tags" button
+5. Click "Expand Now" button
 6. View generated tag groups and sets
+
+For more details: [Multi-Level Tag Adaptation Guide](docs/Multi-Level-Tag-Adaptation-Guide.md)
 
 ### Tag Renaming Feature
 

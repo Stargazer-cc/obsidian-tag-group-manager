@@ -124,8 +124,11 @@
     "cycleButtonTooltip2": "循环模式:已关闭 - 点击开启循环模式,可恢复所有标签。Shift+点击可从标签组更新标签列表。",
     "tagcounttip": "在库中使用了 {count} 次",
     "invalidTagRename": "无效的标签重命名操作",
-    "renamingTag": "正在重命名 #{old} 为 #{new}...",
+    "renamingTag": "正在重命名 {old} 为 {new}...",
     "renameComplete": "标签重命名完成。处理了 {count} 个文件。",
+    "renameNoTagFound": "未在任何文件中找到标签 '{tag}'。",
+    "renameCanvasProcessed": "已处理 Canvas 文件：{count} 个",
+    "renameGroupsUpdated": "已更新标签组：{count} 个",
     "renameErrors": "在 {count} 个文件中发生错误 (请查看控制台)。",
     "scanComplete": "扫描完成，已自动归类 {count} 个标签。",
     "cannotInsertInSortMode": "排序模式下禁止插入标签，请先关闭排序功能切换回插入模式。"

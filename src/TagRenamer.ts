@@ -43,9 +43,10 @@ export class TagRenamer {
         }
 
         let processedFiles = 0;
+        let canvasProcessed = 0;
         const errors: string[] = [];
 
-        new Notice(i18n.t('messages.renamingTag').replace('#{old}', oldTagCore).replace('#{new}', newTagCore));
+        new Notice(i18n.t('messages.renamingTag').replace('{old}', oldTagCore).replace('{new}', newTagCore));
 
         // 1. Process Markdown Files
         const files = this.app.vault.getMarkdownFiles();
@@ -67,7 +68,10 @@ export class TagRenamer {
             for (const file of canvasFiles) {
                 try {
                     const modified = await this.processCanvasFile(file, oldTagCore, newTagCore);
-                    if (modified) processedFiles++;
+                    if (modified) {
+                        canvasProcessed++;
+                        processedFiles++;
+                    }
                 } catch (e) {
                     console.error(`Failed to rename tag in canvas ${file.path}:`, e);
                     errors.push(file.path);
@@ -78,14 +82,17 @@ export class TagRenamer {
         // 3. Update Sync Settings (Tag Groups)
         // Iterate through all tag groups and update the tag name
         let settingsUpdated = false;
+        let groupsUpdated = 0;
         if (this.plugin.settings.tagGroups) {
             this.plugin.settings.tagGroups.forEach(group => {
                 if (group.tags) {
+                    let groupChanged = false;
                     // Find if the group has the exact tag
                     const index = group.tags.indexOf(oldTagCore);
                     if (index !== -1) {
                         group.tags[index] = newTagCore;
                         settingsUpdated = true;
+                        groupChanged = true;
                     }
                     // Also handle nested tags if necessary (though simple replacement handles exact matches)
                     // If we support hierarchy rename (a -> b), then a/c -> b/c should also be updated in groups?
@@ -95,7 +102,11 @@ export class TagRenamer {
                         if (group.tags[i].startsWith(oldTagCore + '/')) {
                             group.tags[i] = newTagCore + group.tags[i].substring(oldTagCore.length);
                             settingsUpdated = true;
+                            groupChanged = true;
                         }
+                    }
+                    if (groupChanged) {
+                        groupsUpdated++;
                     }
                 }
             });
@@ -105,11 +116,30 @@ export class TagRenamer {
             await this.plugin.saveSettings();
         }
 
-        let message = i18n.t('messages.renameComplete').replace('{count}', processedFiles.toString());
-        if (errors.length > 0) {
-            message += `\n` + i18n.t('messages.renameErrors').replace('{count}', errors.length.toString());
+        // Build detailed completion message
+        if (processedFiles === 0 && !settingsUpdated) {
+            new Notice(i18n.t('messages.renameNoTagFound').replace('{tag}', oldTagCore));
+            return;
         }
-        new Notice(message);
+
+        let message = i18n.t('messages.renameComplete').replace('{count}', processedFiles.toString());
+        
+        // Add Canvas info if processed
+        if (includeCanvas && canvasProcessed > 0) {
+            message += '\n' + i18n.t('messages.renameCanvasProcessed').replace('{count}', canvasProcessed.toString());
+        }
+        
+        // Add tag group update info
+        if (settingsUpdated) {
+            message += '\n' + i18n.t('messages.renameGroupsUpdated').replace('{count}', groupsUpdated.toString());
+        }
+        
+        // Add error info if any
+        if (errors.length > 0) {
+            message += '\n' + i18n.t('messages.renameErrors').replace('{count}', errors.length.toString());
+        }
+        
+        new Notice(message, 8000); // Show for 8 seconds due to detailed info
     }
 
     /**
