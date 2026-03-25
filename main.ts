@@ -5,6 +5,8 @@ import { getAllTags } from "obsidian";
 import { TagRenamer } from './src/TagRenamer';
 import { HierarchyBoard } from './src/HierarchyBoard';
 import changelogsData from './changelogs.json';
+import { ViewPlugin, Decoration, DecorationSet, EditorView, ViewUpdate, MatchDecorator, WidgetType } from '@codemirror/view';
+import { Extension, RangeSetBuilder, Compartment, StateField, StateEffect } from '@codemirror/state';
 
 
 // Helper function to insert tag into an input element
@@ -223,6 +225,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 	settings: TagGroupManagerSettings;
 	hierarchyBoard: HierarchyBoard;
 	private registeredCommands: string[] = []; // 跟踪已注册的命令ID
+	private tagColorCompartment = new Compartment(); // CM6 动态扩展容器
 
 
 
@@ -289,32 +292,14 @@ export default class TagGroupManagerPlugin extends Plugin {
 		// 检查版本更新并显示更新日志
 		this.checkVersionAndShowChangelog();
 
+		// 注册 CM6 扩展（使用 Compartment 实现动态更新）
+		this.registerEditorExtension(this.tagColorCompartment.of(this.createTagColorExtension()));
+		
 		// Apply text tag styling if enabled
 		this.applyTextTagStyling();
 
-		// 监听视图模式切换（Live Preview <-> Reading View）
-		this.registerEvent(
-			this.app.workspace.on('layout-change', () => {
-				// 当布局改变时（包括模式切换），重新处理标签
-				if (this.settings.enableTextTagStyling) {
-					// 延迟一小段时间，确保DOM已经更新
-					setTimeout(() => {
-						this.processExistingTags();
-					}, 100);
-				}
-			})
-		);
-
-		// 监听活动叶子变化（切换文件时）
-		this.registerEvent(
-			this.app.workspace.on('active-leaf-change', () => {
-				if (this.settings.enableTextTagStyling) {
-					setTimeout(() => {
-						this.processExistingTags();
-					}, 100);
-				}
-			})
-		);
+		// CM6 ViewPlugin 会自动管理编辑模式下的标签装饰
+		// 无需监听 layout-change / active-leaf-change 来手动刷新标签
 
 		// Auto-run scanner on startup if enabled
 		if (this.settings.autoAddTags) {
@@ -481,8 +466,9 @@ export default class TagGroupManagerPlugin extends Plugin {
 	}
 
 	onunload() {
-		// 停止Live Preview观察器
-		this.stopLivePreviewObserver();
+		// 移除动态样式表
+		const existingStyle = document.getElementById('tgm-dynamic-tag-styles');
+		if (existingStyle) existingStyle.remove();
 		
 		// 清理所有注册的命令
 		this.registeredCommands.forEach(commandId => {
@@ -493,7 +479,9 @@ export default class TagGroupManagerPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const loadedData = await this.loadData();
+		// 使用深度合并确保嵌套对象（如 tagColors）也能正确合并
+		this.settings = this.deepMerge(DEFAULT_SETTINGS, loadedData || {});
 		
 		// 根据展开深度自动设置智能匹配模式
 		if (this.settings.expandDepth === 2) {
@@ -503,6 +491,29 @@ export default class TagGroupManagerPlugin extends Plugin {
 			// 3级展开: 按第二级匹配
 			this.settings.multiLevelAutoAdd.matchMode = 'level2';
 		}
+	}
+
+	// 深度合并对象的辅助方法
+	private deepMerge(target: any, source: any): any {
+		const output = Object.assign({}, target);
+		if (this.isObject(target) && this.isObject(source)) {
+			Object.keys(source).forEach(key => {
+				if (this.isObject(source[key])) {
+					if (!(key in target)) {
+						Object.assign(output, { [key]: source[key] });
+					} else {
+						output[key] = this.deepMerge(target[key], source[key]);
+					}
+				} else {
+					Object.assign(output, { [key]: source[key] });
+				}
+			});
+		}
+		return output;
+	}
+
+	private isObject(item: any): boolean {
+		return item && typeof item === 'object' && !Array.isArray(item);
 	}
 
 	async saveSettings() {
@@ -955,13 +966,135 @@ export default class TagGroupManagerPlugin extends Plugin {
 		return addedCount;
 	}
 
-	private livePreviewObserver: MutationObserver | null = null;
+	private createTagColorExtension(): Extension[] {
+		if (!this.settings.enableTextTagStyling) {
+			return [];
+		}
+
+		const tagColors = this.settings.tagColors;
+		const presetColors: { [key: string]: string } = {
+			'var(--color-red)': '#e74c3c',
+			'var(--color-blue)': '#3498db',
+			'var(--color-green)': '#2ecc71',
+			'var(--color-orange)': '#f39c12',
+			'var(--color-purple)': '#9b59b6',
+			'var(--color-cyan)': '#1abc9c',
+			'var(--color-pink)': '#e91e63'
+		};
+
+		// 为每个有颜色的标签预计算颜色值
+		const tagColorMap = new Map<string, { bgColor: string; textColor: string; safeAttr: string }>();
+
+		for (const [tag, color] of Object.entries(tagColors)) {
+			if (!color) continue;
+
+			let rgb = { r: 0, g: 0, b: 0 };
+			let hexColor = color;
+			if (color.startsWith('var(--')) {
+				hexColor = presetColors[color] || '#888888';
+			}
+
+			if (hexColor.startsWith('#')) {
+				const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hexColor);
+				if (result) rgb = { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) };
+			}
+
+			const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`;
+			const textColor = `rgb(${Math.floor(rgb.r * 0.65)}, ${Math.floor(rgb.g * 0.65)}, ${Math.floor(rgb.b * 0.65)})`;
+			const safeTagAttr = tag.replace(/[\/\s]/g, '-');
+
+			tagColorMap.set(tag, { bgColor, textColor, safeAttr: safeTagAttr });
+		}
+
+		const tagColorsSnapshot = new Map(tagColorMap);
+		
+		const tagColorPlugin = ViewPlugin.fromClass(class {
+			decorations: DecorationSet;
+
+			constructor(view: EditorView) {
+				this.decorations = this.buildDecorations(view);
+			}
+
+			update(update: ViewUpdate) {
+				if (update.docChanged || update.viewportChanged || update.selectionSet) {
+					this.decorations = this.buildDecorations(update.view);
+				}
+			}
+
+			buildDecorations(view: EditorView): DecorationSet {
+				const builder = new RangeSetBuilder<Decoration>();
+				
+				for (const { from, to } of view.visibleRanges) {
+					const text = view.state.doc.sliceString(from, to);
+					// 修改正则表达式以支持 Unicode 字符（包括中文、日文等）
+					// 使用 \p{L} 匹配任何语言的字母，\p{N} 匹配数字
+					const tagRegex = /#[\p{L}\p{N}\-\/]+/gu;
+					let match;
+					
+					while ((match = tagRegex.exec(text)) !== null) {
+						const fullTag = match[0];
+						const tagName = fullTag.substring(1);
+						const colorInfo = tagColorsSnapshot.get(tagName);
+						
+						if (colorInfo) {
+							const tagFrom = from + match.index;
+							const tagTo = tagFrom + fullTag.length;
+							
+							// 使用 widget 替换整个标签
+							builder.add(
+								tagFrom,
+								tagFrom,
+								Decoration.widget({
+									widget: new (class extends WidgetType {
+										toDOM() {
+											const span = document.createElement('span');
+											span.className = 'tgm-colored-tag';
+											span.setAttribute('data-tgm-colored', colorInfo.safeAttr);
+											span.textContent = fullTag;
+											return span;
+										}
+										
+										ignoreEvent() { return false; }
+									})(),
+									side: 0
+								})
+							);
+							
+							// 隐藏原始标签文本
+							builder.add(
+								tagFrom,
+								tagTo,
+								Decoration.replace({})
+							);
+						}
+					}
+				}
+				
+				return builder.finish();
+			}
+		}, {
+			decorations: v => v.decorations
+		});
+
+		return [tagColorPlugin];
+	}
 
 	applyTextTagStyling() {
 		if (!this.settings.enableTextTagStyling) {
 			const existingStyle = document.getElementById('tgm-dynamic-tag-styles');
 			if (existingStyle) existingStyle.remove();
-			this.stopLivePreviewObserver();
+			
+			// 清空 CM6 扩展
+			this.app.workspace.iterateRootLeaves((leaf) => {
+				if (leaf.view instanceof MarkdownView && leaf.view.editor) {
+					const cm = (leaf.view.editor as any).cm as EditorView;
+					if (cm) {
+						cm.dispatch({
+							effects: this.tagColorCompartment.reconfigure([])
+						});
+					}
+				}
+			});
 			return;
 		}
 
@@ -977,12 +1110,13 @@ export default class TagGroupManagerPlugin extends Plugin {
 			'var(--color-pink)': '#e91e63'
 		};
 
+		// 为每个有颜色的标签预计算 CSS 类名和颜色值
+		const tagColorMap = new Map<string, { bgColor: string; textColor: string; safeAttr: string }>();
+
 		for (const [tag, color] of Object.entries(tagColors)) {
 			if (!color) continue;
 
-			// Generate styles for both Reading View and Live Preview
 			let rgb = { r: 0, g: 0, b: 0 };
-
 			let hexColor = color;
 			if (color.startsWith('var(--')) {
 				hexColor = presetColors[color] || '#888888';
@@ -993,17 +1127,17 @@ export default class TagGroupManagerPlugin extends Plugin {
 				if (result) rgb = { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) };
 			}
 
-			// 模仿属性标签样式：更浅的背景色，更深的文字色
 			const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`;
 			const textColor = `rgb(${Math.floor(rgb.r * 0.65)}, ${Math.floor(rgb.g * 0.65)}, ${Math.floor(rgb.b * 0.65)})`;
+			const safeTagAttr = tag.replace(/[\/\s]/g, '-');
+
+			tagColorMap.set(tag, { bgColor, textColor, safeAttr: safeTagAttr });
 
 			// 转义标签名中的特殊字符（用于CSS选择器）
 			const escapedTag = tag.replace(/[\/\.\+\*\?\^\$\(\)\[\]\{\}\|\\]/g, '\\$&');
-			// 为data属性生成安全的值（替换特殊字符为连字符）
-			const safeTagAttr = tag.replace(/[\/\s]/g, '-');
 
+			// Reading View CSS（阅读模式）
 			css += `
-            /* Reading View (阅读模式) - 模仿属性标签样式 */
             .markdown-preview-view a.tag[href="#${escapedTag}" i],
             .markdown-rendered a.tag[href="#${escapedTag}" i] { 
                 background-color: ${bgColor} !important; 
@@ -1012,42 +1146,33 @@ export default class TagGroupManagerPlugin extends Plugin {
                 border-radius: 13px !important;
                 padding: 2px 8px !important;
                 font-size: 13px !important;
-                line-height: 13px !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                height: 17px !important;
+                line-height: normal !important;
+                display: inline-block !important;
+                height: auto !important;
                 text-decoration: none !important;
+                cursor: pointer !important;
             }
-            
-            /* Live Preview (实时预览/编辑模式) - 模仿属性标签样式 */
-            /* 标签容器样式 */
-            .cm-line .cm-hashtag[data-tag-name="${safeTagAttr}"] {
+            `;
+
+			// Live Preview CSS（实时预览模式）
+			css += `
+            .tgm-colored-tag[data-tgm-colored="${safeTagAttr}"] {
                 background-color: ${bgColor} !important;
                 color: ${textColor} !important;
                 border: none !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                height: 17px !important;
-                line-height: 13px !important;
+                border-radius: 13px !important;
+                padding: 2px 8px !important;
+                display: inline-block !important;
+                height: auto !important;
+                line-height: normal !important;
                 font-size: 13px !important;
-            }
-            
-            /* 标签开始（#号）的圆角和内边距 */
-            .cm-line .cm-hashtag-begin[data-tag-name="${safeTagAttr}"] {
-                border-top-left-radius: 13px !important;
-                border-bottom-left-radius: 13px !important;
-                padding-left: 8px !important;
-            }
-            
-            /* 标签结束（文本）的圆角和内边距 */
-            .cm-line .cm-hashtag-end[data-tag-name="${safeTagAttr}"] {
-                border-top-right-radius: 13px !important;
-                border-bottom-right-radius: 13px !important;
-                padding-right: 8px !important;
+                text-decoration: none !important;
+                cursor: pointer !important;
             }
             `;
 		}
 
+		// 注入全局样式表
 		let styleEl = document.getElementById('tgm-dynamic-tag-styles') as HTMLStyleElement;
 		if (!styleEl) {
 			styleEl = document.createElement('style');
@@ -1056,84 +1181,18 @@ export default class TagGroupManagerPlugin extends Plugin {
 		}
 		styleEl.textContent = css;
 
-		// 启动Live Preview标签监听器
-		this.startLivePreviewObserver();
-	}
-
-	private startLivePreviewObserver() {
-		// 停止现有的观察器
-		this.stopLivePreviewObserver();
-
-		// 处理现有的标签元素
-		this.processExistingTags();
-
-		// 创建新的观察器来监听DOM变化
-		this.livePreviewObserver = new MutationObserver((mutations) => {
-			for (const mutation of mutations) {
-				if (mutation.type === 'childList') {
-					mutation.addedNodes.forEach((node) => {
-						if (node.nodeType === Node.ELEMENT_NODE) {
-							const element = node as HTMLElement;
-							// 处理新添加的标签元素
-							this.processTagElement(element);
-							// 处理子元素中的标签
-							const hashtags = element.querySelectorAll('.cm-hashtag');
-							hashtags.forEach((tag) => this.processTagElement(tag as HTMLElement));
-						}
+		// 更新 CM6 扩展
+		const extension = this.createTagColorExtension();
+		this.app.workspace.iterateRootLeaves((leaf) => {
+			if (leaf.view instanceof MarkdownView && leaf.view.editor) {
+				const cm = (leaf.view.editor as any).cm as EditorView;
+				if (cm) {
+					cm.dispatch({
+						effects: this.tagColorCompartment.reconfigure(extension)
 					});
 				}
 			}
 		});
-
-		// 观察整个文档的变化
-		this.livePreviewObserver.observe(document.body, {
-			childList: true,
-			subtree: true
-		});
-	}
-
-	private stopLivePreviewObserver() {
-		if (this.livePreviewObserver) {
-			this.livePreviewObserver.disconnect();
-			this.livePreviewObserver = null;
-		}
-	}
-
-	private processExistingTags() {
-		// 处理所有现有的标签元素
-		const hashtags = document.querySelectorAll('.cm-hashtag');
-		hashtags.forEach((tag) => this.processTagElement(tag as HTMLElement));
-	}
-
-	private processTagElement(element: HTMLElement) {
-		// 只处理标签文本部分（cm-hashtag-end）
-		if (!element.classList.contains('cm-hashtag-end')) {
-			return;
-		}
-
-		// 如果已经处理过，跳过
-		if (element.hasAttribute('data-tag-name')) {
-			return;
-		}
-
-		// 获取标签文本
-		const tagText = element.textContent?.trim();
-		if (!tagText) return;
-
-		// 检查这个标签是否有配置的颜色
-		if (this.settings.tagColors[tagText]) {
-			// 生成安全的属性值
-			const safeTagAttr = tagText.replace(/[\/\s]/g, '-');
-			
-			// 为标签文本元素添加data属性
-			element.setAttribute('data-tag-name', safeTagAttr);
-			
-			// 找到对应的#号元素（前一个兄弟节点）
-			const prevSibling = element.previousElementSibling;
-			if (prevSibling && prevSibling.classList.contains('cm-hashtag-begin')) {
-				prevSibling.setAttribute('data-tag-name', safeTagAttr);
-			}
-		}
 	}
 }
 
@@ -1331,11 +1390,11 @@ class TagSelectorModal {
 		if (searchInput) {
 			searchInput.addEventListener('focus', () => {
 				this.isSearchBoxFocused = true;
-				// console.log('搜索框获得焦点');
+				
 			});
 			searchInput.addEventListener('blur', () => {
 				this.isSearchBoxFocused = false;
-				// console.log('搜索框失去焦点');
+				
 			});
 		}
 
@@ -2154,6 +2213,8 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 	private async saveSettingsAndRefreshDisplay() {
 		try {
 			await this.plugin.saveSettings();
+			// 应用标签样式
+			this.plugin.applyTextTagStyling();
 			this.display();
 		} catch (error) {
 			console.error("Failed to save settings and refresh display:", error);
@@ -2508,7 +2569,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 
 		// Text Tag Styling (Moved here)
 		new Setting(colorSection)
-			.setName(i18n.t('settings.tagColors') || '标签颜色管理')
+			.setName(i18n.t('settings.tagColors') || '正文标签颜色样式')
 			.setDesc(i18n.t('multiLevelAdaptation.enableStylingDesc'))
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.enableTextTagStyling)
@@ -2517,7 +2578,43 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 					this.plugin.applyTextTagStyling();
 				}));
-		new Setting(colorSection).setName(i18n.t('settings.colorSettings') || '颜色设置').setHeading();
+
+		// 添加导入按钮（用于老用户从 tagColorMappings 导入到 tagColors）
+		const importSetting = new Setting(colorSection)
+			.setName('刷新正文标签颜色数据')
+			.setDesc('1.8.5版本以前安装的老用户需要点击此处按钮导入颜色数据才能使用标签应用于正文功能。')
+			.addButton(button => button
+				.setButtonText('刷新颜色数据')
+				.setCta()
+				.onClick(async () => {
+					let importCount = 0;
+					
+					// 从 tagColorMappings 导入到 tagColors
+					this.plugin.settings.tagColorMappings.forEach(mapping => {
+						if (mapping.enabled && !mapping.isRegex) {
+							// 只导入启用的、非正则表达式的映射
+							const tag = mapping.pattern;
+							const color = mapping.color;
+							
+							// 如果 tagColors 中还没有这个标签的颜色，则导入
+							if (!this.plugin.settings.tagColors[tag]) {
+								this.plugin.settings.tagColors[tag] = color;
+								importCount++;
+							}
+						}
+					});
+					
+					if (importCount > 0) {
+						await this.plugin.saveSettings();
+						this.plugin.applyTextTagStyling();
+						new Notice(`成功导入 ${importCount} 个标签的颜色设置`);
+						this.display();
+					} else {
+						new Notice('没有需要导入的颜色数据，或所有颜色已经存在');
+					}
+				}));
+
+		new Setting(colorSection).setName(i18n.t('settings.colorSettings') || '颜色添加设置').setHeading();
 
 		// 添加自定义颜色功能开关
 		new Setting(colorSection)
@@ -2933,6 +3030,8 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 							// 保存颜色
 							this.plugin.settings.tagColors[tag] = color;
 							void this.plugin.saveSettings();
+							// 应用标签样式
+							this.plugin.applyTextTagStyling();
 							// 刷新显示
 							this.display();
 						}).open();
@@ -3941,13 +4040,12 @@ class TagGroupView extends ItemView {
 						// 如果不在搜索框中，则插入到编辑器
 						// 尝试获取当前活动的编辑器
 						let editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-						console.log('[TGM Debug] Tag clicked, MarkdownView editor:', editor ? 'found' : 'not found');
+						
 
 						// 如果不是 MarkdownView，尝试从 activeEditor 获取 (支持 Canvas)
 						if (!editor) {
 							// @ts-ignore - activeEditor is available in newer Obsidian versions
 							editor = this.app.workspace.activeEditor?.editor;
-							console.log('[TGM Debug] activeEditor:', editor ? 'found' : 'not found');
 						}
 
 						if (!editor) {
@@ -3955,12 +4053,10 @@ class TagGroupView extends ItemView {
 							const recentLeaf = this.app.workspace.getMostRecentLeaf();
 							const leafView = recentLeaf?.view;
 							const viewType = leafView?.getViewType();
-							console.log('[TGM Debug] recentLeaf viewType:', viewType);
-
+							
 							// 检查是否是 Markdown 视图
 							if (leafView && viewType === 'markdown') {
 								editor = (leafView as MarkdownView).editor;
-								console.log('[TGM Debug] Got editor from recentLeaf markdown view:', editor ? 'found' : 'not found');
 							}
 						}
 
@@ -4098,8 +4194,7 @@ class TagGroupView extends ItemView {
 								}
 							}
 						}
-						console.log(`[TGM YAML Debug] cursor.line=${cursor.line}, yamlStart=${yamlStart}, yamlEnd=${yamlEnd}, isInYaml=${isInYaml}, yamlTagLine=${yamlTagLine}`);
-						console.log(`[TGM YAML Debug] lines[0]='${lines[0]}', lines.length=${lines.length}`);
+					
 						let newCursor;
 						let tagText = '';
 						if (isInYaml) {

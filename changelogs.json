@@ -1,4 +1,23 @@
 {
+  "1.8.7": {
+    "zh": [
+      "**bug修复**：",
+      "此bug曾导致新版插件无法读取旧版的标签颜色数据，使得应用标签于正文功能失效。现在你可以在设置中手动快捷导入旧版颜色数据。",
+      "",
+      "**其它改进：**",
+      "优化控制台输出内容，更简洁",
+      "优化了在开启正文标签样式后，预览和编辑视图下的渲染表现，更加稳定"
+
+    ],
+    "en":[
+      "Bug Fixes：",
+      "This bug previously caused the new version of the plugin to fail to read the old version’s tag color data, resulting in the failure of the 'apply tag to text' feature.You can now manually import color data from previous versions in Settings.",
+      "",
+      "Other Improvements：",
+      "Optimized console output for more concise content.",
+      "Improved rendering performance in both preview and edit views when the 'text tag style' feature is enabled, making it more stable."
+    ]
+  },
   "1.8.5": {
     "zh": [
       "## 🎉 三大核心功能全新上线",
