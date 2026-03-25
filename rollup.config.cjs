@@ -22,7 +22,7 @@ module.exports = {
     exports: 'default',
     banner,
   },
-  external: ['obsidian'],
+  external: ['obsidian', '@codemirror/state', '@codemirror/view'],
   plugins: [
     typescript({ clean: true }),
     nodeResolve({browser: true}),
