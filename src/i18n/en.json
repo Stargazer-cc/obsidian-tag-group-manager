@@ -79,7 +79,10 @@
     "pleaseEnterPattern": "Please enter a pattern",
     "setGroupColor": "Set Group Color",
     "setGroupColorDesc": "Apply the same color to all tags in this group",
-    "groupColorApplied": "Color applied to {count} tags in {groupName} group"
+    "groupColorApplied": "Color applied to {count} tags in {groupName} group",
+    "refreshDecorations": "Refresh Tag Decorations",
+    "refreshDecorationsDesc": "After modifying tag color settings, click this button to immediately apply the new colors in all open files. Under normal circumstances, decorations sync automatically and manual refresh is not needed.",
+    "refreshDecorationsButton": "Refresh Decorations"
   },
   "selector": {
     "drag": "Drag",
@@ -101,7 +104,8 @@
   "commands": {
     "insertHere": "Please click on the tag to insert",
     "clearTags": "Clear all tags",
-    "insertFrom": "Insert tags from '{groupName}'"
+    "insertFrom": "Insert tags from '{groupName}'",
+    "refreshTagDecorations": "Refresh tag color decorations"
   },
   "messages": {
     "groupCreated": "Tag group created",
@@ -131,7 +135,8 @@
     "renameGroupsUpdated": "Tag groups updated: {count}",
     "renameErrors": "Errors occurred in {count} files (check console).",
     "scanComplete": "Scan complete, automatically categorized {count} tags.",
-    "cannotInsertInSortMode": "Tag insertion is disabled in Sort Mode. Please disable sorting to switch back to Insert Mode."
+    "cannotInsertInSortMode": "Tag insertion is disabled in Sort Mode. Please disable sorting to switch back to Insert Mode.",
+    "tagDecorationsRefreshed": "Tag decorations refreshed"
   },
   "rename": {
     "commandName": "Rename Tag (Global)",

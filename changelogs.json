@@ -1,4 +1,28 @@
 {
+  "1.8.8": {
+    "zh": [
+      "## 🐛 重要修复",
+      "",
+      "**修复标签删除问题**：彻底解决了开启「应用标签颜色于正文」后标签无法正常删除的问题",
+      "此 bug 曾导致当某个旧文档的内容变动未被正确捕捉时，光标实际定位出错，无法正常删除行末标签内容",
+      "",
+      "## 📊 功能改进&性能提升",
+      "",
+      "- 新增了装饰器刷新按钮，为异常情况兜底",
+      "- 大幅提升大文件中的标签渲染性能，编辑和滚动更加流畅"
+    ],
+    "en": [
+      "## 🐛 Important Fixes",
+      "",
+      "**Fixed tag deletion issues**: Completely resolved the problem where tags couldn't be deleted properly when 'Apply tag colors to text' is enabled",
+      "This bug previously caused cursor positioning errors when old document changes weren't properly captured, preventing normal deletion of tags at line ends",
+      "",
+      "## 📊 Feature Improvements & Performance Boost",
+      "",
+      "- Added decorator refresh button as a fallback for exceptional cases",
+      "- Significantly improved tag rendering performance in large files, smoother editing and scrolling"
+    ]
+  },
   "1.8.7": {
     "zh": [
       "**bug修复**：",
