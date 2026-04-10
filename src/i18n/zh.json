@@ -79,7 +79,10 @@
     "pleaseEnterPattern": "请输入匹配模式",
     "setGroupColor": "设置组颜色",
     "setGroupColorDesc": "为整个标签组的所有标签设置相同颜色",
-    "groupColorApplied": "已为 {groupName} 组的 {count} 个标签应用颜色"
+    "groupColorApplied": "已为 {groupName} 组的 {count} 个标签应用颜色",
+    "refreshDecorations": "刷新标签装饰",
+    "refreshDecorationsDesc": "在修改标签颜色设置后，点击此按钮可以立即在所有已打开的文件中应用新颜色。正常情况下，装饰器会自动同步，无需手动刷新。",
+    "refreshDecorationsButton": "刷新装饰"
   },
   "selector": {
     "drag": "拖动",
@@ -101,7 +104,8 @@
   "commands": {
     "insertHere": "请点击标签插入",
     "clearTags": "清除所有标签",
-    "insertFrom": "在此处插入「{groupName}」里的标签"
+    "insertFrom": "在此处插入「{groupName}」里的标签",
+    "refreshTagDecorations": "刷新标签颜色装饰"
   },
   "messages": {
     "groupCreated": "标签组已创建",
@@ -131,7 +135,8 @@
     "renameGroupsUpdated": "已更新标签组：{count} 个",
     "renameErrors": "在 {count} 个文件中发生错误 (请查看控制台)。",
     "scanComplete": "扫描完成，已自动归类 {count} 个标签。",
-    "cannotInsertInSortMode": "排序模式下禁止插入标签，请先关闭排序功能切换回插入模式。"
+    "cannotInsertInSortMode": "排序模式下禁止插入标签，请先关闭排序功能切换回插入模式。",
+    "tagDecorationsRefreshed": "标签装饰已刷新"
   },
   "rename": {
     "commandName": "全局重命名标签",

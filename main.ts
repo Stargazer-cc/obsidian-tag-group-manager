@@ -6,7 +6,7 @@ import { TagRenamer } from './src/TagRenamer';
 import { HierarchyBoard } from './src/HierarchyBoard';
 import changelogsData from './changelogs.json';
 import { ViewPlugin, Decoration, DecorationSet, EditorView, ViewUpdate, MatchDecorator, WidgetType } from '@codemirror/view';
-import { Extension, RangeSetBuilder, Compartment, StateField, StateEffect } from '@codemirror/state';
+import { Extension, RangeSetBuilder, Compartment, StateField, StateEffect, EditorState } from '@codemirror/state';
 
 
 // Helper function to insert tag into an input element
@@ -286,6 +286,16 @@ export default class TagGroupManagerPlugin extends Plugin {
 		// 为每个标签组注册命令
 		this.registerTagGroupCommands();
 
+		// 添加刷新标签装饰器的命令
+		this.addCommand({
+			id: 'refresh-tag-decorations',
+			name: i18n.t('commands.refreshTagDecorations') || '刷新标签颜色装饰',
+			callback: () => {
+				this.refreshAllTagDecorations();
+				new Notice(i18n.t('messages.tagDecorationsRefreshed') || '标签装饰已刷新');
+			}
+		});
+
 		// 添加设置选项卡
 		this.addSettingTab(new TagGroupManagerSettingTab(this.app, this));
 
@@ -463,6 +473,12 @@ export default class TagGroupManagerPlugin extends Plugin {
 			// 记录已注册的命令ID
 			this.registeredCommands.push(commandId);
 		});
+	}
+
+	// 刷新所有打开文件的标签装饰器
+	refreshAllTagDecorations() {
+		// 重新应用标签样式，这会重新配置 CM6 扩展
+		this.applyTextTagStyling();
 	}
 
 	onunload() {
@@ -1008,69 +1024,62 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 		const tagColorsSnapshot = new Map(tagColorMap);
 		
+		// 构建装饰器的辅助函数 - 使用 mark 装饰器，保持文本完全可编辑
+		const buildDecorations = (view: EditorView): DecorationSet => {
+			const builder = new RangeSetBuilder<Decoration>();
+			
+			// 性能优化：只处理可见范围
+			for (const { from, to } of view.visibleRanges) {
+				const text = view.state.doc.sliceString(from, to);
+				const tagRegex = /#[\p{L}\p{N}\-\/]+/gu;
+				let match;
+				
+				while ((match = tagRegex.exec(text)) !== null) {
+					const fullTag = match[0];
+					const tagName = fullTag.substring(1);
+					const colorInfo = tagColorsSnapshot.get(tagName);
+					
+					if (colorInfo) {
+						const tagFrom = from + match.index;
+						const tagTo = tagFrom + fullTag.length;
+						
+						// 使用 mark 装饰器：只添加 CSS 类，不替换文本
+						// 这样可以保持文本完全可编辑，删除操作完全正常
+						builder.add(
+							tagFrom,
+							tagTo,
+							Decoration.mark({
+								class: 'tgm-colored-tag',
+								attributes: {
+									'data-tgm-colored': colorInfo.safeAttr
+								}
+							})
+						);
+					}
+				}
+			}
+			
+			return builder.finish();
+		};
+		
+		// 使用 ViewPlugin 管理装饰器
 		const tagColorPlugin = ViewPlugin.fromClass(class {
 			decorations: DecorationSet;
 
 			constructor(view: EditorView) {
-				this.decorations = this.buildDecorations(view);
+				this.decorations = buildDecorations(view);
 			}
 
 			update(update: ViewUpdate) {
-				if (update.docChanged || update.viewportChanged || update.selectionSet) {
-					this.decorations = this.buildDecorations(update.view);
+				// 性能优化：只在必要时重建装饰器
+				if (update.docChanged) {
+					// 文档变化时：先映射位置，再重建
+					this.decorations = this.decorations.map(update.changes);
+					this.decorations = buildDecorations(update.view);
+				} else if (update.viewportChanged) {
+					// 视口变化时：重建装饰器
+					this.decorations = buildDecorations(update.view);
 				}
-			}
-
-			buildDecorations(view: EditorView): DecorationSet {
-				const builder = new RangeSetBuilder<Decoration>();
-				
-				for (const { from, to } of view.visibleRanges) {
-					const text = view.state.doc.sliceString(from, to);
-					// 修改正则表达式以支持 Unicode 字符（包括中文、日文等）
-					// 使用 \p{L} 匹配任何语言的字母，\p{N} 匹配数字
-					const tagRegex = /#[\p{L}\p{N}\-\/]+/gu;
-					let match;
-					
-					while ((match = tagRegex.exec(text)) !== null) {
-						const fullTag = match[0];
-						const tagName = fullTag.substring(1);
-						const colorInfo = tagColorsSnapshot.get(tagName);
-						
-						if (colorInfo) {
-							const tagFrom = from + match.index;
-							const tagTo = tagFrom + fullTag.length;
-							
-							// 使用 widget 替换整个标签
-							builder.add(
-								tagFrom,
-								tagFrom,
-								Decoration.widget({
-									widget: new (class extends WidgetType {
-										toDOM() {
-											const span = document.createElement('span');
-											span.className = 'tgm-colored-tag';
-											span.setAttribute('data-tgm-colored', colorInfo.safeAttr);
-											span.textContent = fullTag;
-											return span;
-										}
-										
-										ignoreEvent() { return false; }
-									})(),
-									side: 0
-								})
-							);
-							
-							// 隐藏原始标签文本
-							builder.add(
-								tagFrom,
-								tagTo,
-								Decoration.replace({})
-							);
-						}
-					}
-				}
-				
-				return builder.finish();
 			}
 		}, {
 			decorations: v => v.decorations
@@ -1155,15 +1164,34 @@ export default class TagGroupManagerPlugin extends Plugin {
             `;
 
 			// Live Preview CSS（实时预览模式）
+			// 由于 Obsidian 会将标签分成 # 和标签名两部分，我们需要特殊处理
 			css += `
-            .tgm-colored-tag[data-tgm-colored="${safeTagAttr}"] {
+            /* 移除 Obsidian 默认的标签背景 */
+            .cm-hashtag:has(.tgm-colored-tag[data-tgm-colored="${safeTagAttr}"]) {
+                background-color: transparent !important;
+                padding: 0 !important;
+            }
+            
+            /* 标签的 # 符号部分 */
+            .cm-hashtag-begin .tgm-colored-tag[data-tgm-colored="${safeTagAttr}"] {
                 background-color: ${bgColor} !important;
                 color: ${textColor} !important;
                 border: none !important;
-                border-radius: 13px !important;
-                padding: 2px 8px !important;
-                display: inline-block !important;
-                height: auto !important;
+                border-radius: 13px 0 0 13px !important;
+                padding: 2px 0 2px 8px !important;
+                line-height: normal !important;
+                font-size: 13px !important;
+                text-decoration: none !important;
+                cursor: pointer !important;
+            }
+            
+            /* 标签的名称部分 */
+            .cm-hashtag-end .tgm-colored-tag[data-tgm-colored="${safeTagAttr}"] {
+                background-color: ${bgColor} !important;
+                color: ${textColor} !important;
+                border: none !important;
+                border-radius: 0 13px 13px 0 !important;
+                padding: 2px 8px 2px 0 !important;
                 line-height: normal !important;
                 font-size: 13px !important;
                 text-decoration: none !important;
@@ -2577,26 +2605,41 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 					this.plugin.settings.enableTextTagStyling = value;
 					await this.plugin.saveSettings();
 					this.plugin.applyTextTagStyling();
+					// 刷新显示以显示/隐藏相关设置
+					this.display();
 				}));
 
-		// 添加导入按钮（用于老用户从 tagColorMappings 导入到 tagColors）
-		const importSetting = new Setting(colorSection)
-			.setName('刷新正文标签颜色数据')
-			.setDesc('1.8.5版本以前安装的老用户需要点击此处按钮导入颜色数据才能使用标签应用于正文功能。')
-			.addButton(button => button
-				.setButtonText('刷新颜色数据')
-				.setCta()
-				.onClick(async () => {
-					let importCount = 0;
-					
-					// 从 tagColorMappings 导入到 tagColors
-					this.plugin.settings.tagColorMappings.forEach(mapping => {
-						if (mapping.enabled && !mapping.isRegex) {
-							// 只导入启用的、非正则表达式的映射
-							const tag = mapping.pattern;
-							const color = mapping.color;
-							
-							// 如果 tagColors 中还没有这个标签的颜色，则导入
+		// 只有在启用了正文标签样式时才显示以下设置
+		if (this.plugin.settings.enableTextTagStyling) {
+			// 添加刷新装饰器按钮
+			new Setting(colorSection)
+				.setName(i18n.t('settings.refreshDecorations') || '刷新标签装饰')
+				.setDesc(i18n.t('settings.refreshDecorationsDesc') || '如果发现某些已打开的文件中标签颜色显示不正确，或者删除标签时出现异常，可以点击此按钮刷新所有打开文件的标签装饰。通常情况下不需要手动刷新，系统会自动同步。')
+				.addButton(button => button
+					.setButtonText(i18n.t('settings.refreshDecorationsButton') || '刷新装饰')
+					.onClick(() => {
+						this.plugin.refreshAllTagDecorations();
+						new Notice(i18n.t('messages.tagDecorationsRefreshed') || '标签装饰已刷新');
+					}));
+
+			// 添加导入按钮（用于老用户从 tagColorMappings 导入到 tagColors）
+			const importSetting = new Setting(colorSection)
+				.setName('刷新正文标签颜色数据')
+				.setDesc('1.8.5版本以前安装的老用户需要点击此处按钮导入颜色数据才能使用标签应用于正文功能。')
+				.addButton(button => button
+					.setButtonText('刷新颜色数据')
+					.setCta()
+					.onClick(async () => {
+						let importCount = 0;
+						
+						// 从 tagColorMappings 导入到 tagColors
+						this.plugin.settings.tagColorMappings.forEach(mapping => {
+							if (mapping.enabled && !mapping.isRegex) {
+								// 只导入启用的、非正则表达式的映射
+								const tag = mapping.pattern;
+								const color = mapping.color;
+								
+								// 如果 tagColors 中还没有这个标签的颜色，则导入
 							if (!this.plugin.settings.tagColors[tag]) {
 								this.plugin.settings.tagColors[tag] = color;
 								importCount++;
@@ -2613,6 +2656,7 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 						new Notice('没有需要导入的颜色数据，或所有颜色已经存在');
 					}
 				}));
+		}
 
 		new Setting(colorSection).setName(i18n.t('settings.colorSettings') || '颜色添加设置').setHeading();
 
