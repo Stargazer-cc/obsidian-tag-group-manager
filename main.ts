@@ -1093,8 +1093,8 @@ export default class TagGroupManagerPlugin extends Plugin {
 			const existingStyle = document.getElementById('tgm-dynamic-tag-styles');
 			if (existingStyle) existingStyle.remove();
 			
-			// 清空 CM6 扩展
-			this.app.workspace.iterateRootLeaves((leaf) => {
+			// 清空 CM6 扩展 - 使用 iterateAllLeaves 确保所有分屏都被更新
+			this.app.workspace.iterateAllLeaves((leaf) => {
 				if (leaf.view instanceof MarkdownView && leaf.view.editor) {
 					const cm = (leaf.view.editor as any).cm as EditorView;
 					if (cm) {
@@ -1209,9 +1209,9 @@ export default class TagGroupManagerPlugin extends Plugin {
 		}
 		styleEl.textContent = css;
 
-		// 更新 CM6 扩展
+		// 更新 CM6 扩展 - 使用 iterateAllLeaves 确保所有分屏都被更新
 		const extension = this.createTagColorExtension();
-		this.app.workspace.iterateRootLeaves((leaf) => {
+		this.app.workspace.iterateAllLeaves((leaf) => {
 			if (leaf.view instanceof MarkdownView && leaf.view.editor) {
 				const cm = (leaf.view.editor as any).cm as EditorView;
 				if (cm) {
