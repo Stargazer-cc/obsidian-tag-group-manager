@@ -27,33 +27,60 @@ export class TagRenamer {
     }
 
     /**
+     * Deletes a tag globally across the vault.
+     * @param oldTag The tag to delete (without #)
+     * @param cascadeDelete Whether to also delete child tags
+     * @param includeCanvas Whether to also delete tags in .canvas files
+     */
+    async deleteTag(oldTag: string, cascadeDelete: boolean, includeCanvas: boolean = false): Promise<void> {
+        const oldTagCore = oldTag.startsWith('#') ? oldTag.substring(1) : oldTag;
+        
+        if (!oldTagCore) {
+            new Notice(i18n.t('messages.invalidTagRename'));
+            return;
+        }
+        
+        // 调用 renameTag，但传入特殊参数表示删除模式
+        await this.renameTag(oldTag, '', includeCanvas, cascadeDelete);
+    }
+
+    /**
      * Renames a tag globally across the vault.
      * @param oldTag The tag to rename (without #)
      * @param newTag The new tag name (without #)
      * @param includeCanvas Whether to also rename tags in .canvas files
+     * @param cascadeOperation For operations, whether to cascade to child tags (rename/delete children)
      */
-    async renameTag(oldTag: string, newTag: string, includeCanvas: boolean = false): Promise<void> {
+    async renameTag(oldTag: string, newTag: string, includeCanvas: boolean = false, cascadeOperation: boolean = true): Promise<void> {
         // Normalize tags (remove # if user provided it)
         const oldTagCore = oldTag.startsWith('#') ? oldTag.substring(1) : oldTag;
         const newTagCore = newTag.startsWith('#') ? newTag.substring(1) : newTag;
 
-        if (!oldTagCore || !newTagCore || oldTagCore === newTagCore) {
+        // 验证：旧标签不能为空，且新旧标签不能相同
+        if (!oldTagCore || oldTagCore === newTagCore) {
             new Notice(i18n.t('messages.invalidTagRename'));
             return;
         }
+
+        // 如果新标签为空，视为删除操作
+        const isDeleteOperation = !newTagCore || newTagCore.trim() === '';
 
         let processedFiles = 0;
         let canvasProcessed = 0;
         const errors: string[] = [];
 
-        new Notice(i18n.t('messages.renamingTag').replace('{old}', oldTagCore).replace('{new}', newTagCore));
+        if (isDeleteOperation) {
+            new Notice(i18n.t('messages.deletingTag').replace('{tag}', oldTagCore));
+        } else {
+            new Notice(i18n.t('messages.renamingTag').replace('{old}', oldTagCore).replace('{new}', newTagCore));
+        }
 
         // 1. Process Markdown Files
         const files = this.app.vault.getMarkdownFiles();
         for (const file of files) {
             try {
                 if (await this.fileHasTag(file, oldTagCore)) {
-                    await this.processFile(file, oldTagCore, newTagCore);
+                    await this.processFile(file, oldTagCore, newTagCore, cascadeOperation);
                     processedFiles++;
                 }
             } catch (e) {
@@ -87,29 +114,115 @@ export class TagRenamer {
             this.plugin.settings.tagGroups.forEach(group => {
                 if (group.tags) {
                     let groupChanged = false;
-                    // Find if the group has the exact tag
-                    const index = group.tags.indexOf(oldTagCore);
-                    if (index !== -1) {
-                        group.tags[index] = newTagCore;
-                        settingsUpdated = true;
-                        groupChanged = true;
-                    }
-                    // Also handle nested tags if necessary (though simple replacement handles exact matches)
-                    // If we support hierarchy rename (a -> b), then a/c -> b/c should also be updated in groups?
-                    // Current Tag Group implementation stores full tag strings.
-                    // So we should check for startsWith
-                    for (let i = 0; i < group.tags.length; i++) {
-                        if (group.tags[i].startsWith(oldTagCore + '/')) {
-                            group.tags[i] = newTagCore + group.tags[i].substring(oldTagCore.length);
+                    
+                    if (isDeleteOperation) {
+                        // 删除操作：从标签组中移除标签
+                        const initialLength = group.tags.length;
+                        
+                        if (cascadeOperation) {
+                            // 级联删除：移除标签及其所有子标签
+                            group.tags = group.tags.filter(tag => tag !== oldTagCore && !tag.startsWith(oldTagCore + '/'));
+                        } else {
+                            // 仅删除此标签：只移除精确匹配的标签
+                            group.tags = group.tags.filter(tag => tag !== oldTagCore);
+                        }
+                        
+                        if (group.tags.length !== initialLength) {
                             settingsUpdated = true;
                             groupChanged = true;
                         }
+                        
+                        // 同时从 autoExpandedTags 中移除
+                        if (group.autoExpandedTags) {
+                            const autoInitialLength = group.autoExpandedTags.length;
+                            if (cascadeOperation) {
+                                group.autoExpandedTags = group.autoExpandedTags.filter(tag => 
+                                    tag !== oldTagCore && !tag.startsWith(oldTagCore + '/')
+                                );
+                            } else {
+                                group.autoExpandedTags = group.autoExpandedTags.filter(tag => tag !== oldTagCore);
+                            }
+                            if (group.autoExpandedTags.length !== autoInitialLength) {
+                                settingsUpdated = true;
+                                groupChanged = true;
+                            }
+                        }
+                    } else {
+                        // 重命名操作：替换标签名
+                        if (cascadeOperation) {
+                            // 级联重命名：重命名标签及其所有子标签
+                            // Find if the group has the exact tag
+                            const index = group.tags.indexOf(oldTagCore);
+                            if (index !== -1) {
+                                group.tags[index] = newTagCore;
+                                settingsUpdated = true;
+                                groupChanged = true;
+                            }
+                            // Also handle nested tags
+                            for (let i = 0; i < group.tags.length; i++) {
+                                if (group.tags[i].startsWith(oldTagCore + '/')) {
+                                    group.tags[i] = newTagCore + group.tags[i].substring(oldTagCore.length);
+                                    settingsUpdated = true;
+                                    groupChanged = true;
+                                }
+                            }
+                            
+                            // 同时更新 autoExpandedTags
+                            if (group.autoExpandedTags) {
+                                const autoIndex = group.autoExpandedTags.indexOf(oldTagCore);
+                                if (autoIndex !== -1) {
+                                    group.autoExpandedTags[autoIndex] = newTagCore;
+                                    settingsUpdated = true;
+                                }
+                                for (let i = 0; i < group.autoExpandedTags.length; i++) {
+                                    if (group.autoExpandedTags[i].startsWith(oldTagCore + '/')) {
+                                        group.autoExpandedTags[i] = newTagCore + group.autoExpandedTags[i].substring(oldTagCore.length);
+                                        settingsUpdated = true;
+                                    }
+                                }
+                            }
+                        } else {
+                            // 仅重命名此标签：只重命名精确匹配的标签
+                            const index = group.tags.indexOf(oldTagCore);
+                            if (index !== -1) {
+                                group.tags[index] = newTagCore;
+                                settingsUpdated = true;
+                                groupChanged = true;
+                            }
+                            
+                            // 同时更新 autoExpandedTags
+                            if (group.autoExpandedTags) {
+                                const autoIndex = group.autoExpandedTags.indexOf(oldTagCore);
+                                if (autoIndex !== -1) {
+                                    group.autoExpandedTags[autoIndex] = newTagCore;
+                                    settingsUpdated = true;
+                                }
+                            }
+                        }
                     }
+                    
                     if (groupChanged) {
                         groupsUpdated++;
                     }
                 }
             });
+        }
+        
+        // 删除操作时，清除标签颜色设置
+        if (isDeleteOperation && this.plugin.settings.tagColors) {
+            if (this.plugin.settings.tagColors[oldTagCore]) {
+                delete this.plugin.settings.tagColors[oldTagCore];
+                settingsUpdated = true;
+            }
+            // 根据 cascadeOperation 决定是否清除子标签的颜色
+            if (cascadeOperation) {
+                Object.keys(this.plugin.settings.tagColors).forEach(tag => {
+                    if (tag.startsWith(oldTagCore + '/')) {
+                        delete this.plugin.settings.tagColors[tag];
+                        settingsUpdated = true;
+                    }
+                });
+            }
         }
 
         if (settingsUpdated) {
@@ -118,7 +231,11 @@ export class TagRenamer {
 
         // Build detailed completion message
         if (processedFiles === 0 && !settingsUpdated) {
-            new Notice(i18n.t('messages.renameNoTagFound').replace('{tag}', oldTagCore));
+            if (isDeleteOperation) {
+                new Notice(i18n.t('messages.renameNoTagFound').replace('{tag}', oldTagCore));
+            } else {
+                new Notice(i18n.t('messages.renameNoTagFound').replace('{tag}', oldTagCore));
+            }
             return;
         }
 
@@ -176,28 +293,53 @@ export class TagRenamer {
     /**
      * Processes a single file to rename the tag in both frontmatter and content.
      */
-    private async processFile(file: TFile, oldTag: string, newTag: string): Promise<void> {
+    private async processFile(file: TFile, oldTag: string, newTag: string, cascadeOperation: boolean = true): Promise<void> {
+        const isDeleteOperation = !newTag || newTag.trim() === '';
+        
         // 1. Process Frontmatter safely
         await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-            // Function to recursively rename tags in an array or string
+            // Function to recursively rename/delete tags in an array or string
             const replaceInValue = (val: any): any => {
                 if (typeof val === 'string') {
-                    if (val === oldTag) return newTag;
-                    if (val.startsWith(oldTag + '/')) return newTag + val.substring(oldTag.length);
+                    // 精确匹配
+                    if (val === oldTag) {
+                        return isDeleteOperation ? null : newTag;
+                    }
+                    // 子标签匹配
+                    if (val.startsWith(oldTag + '/')) {
+                        if (isDeleteOperation) {
+                            // 删除操作：根据 cascadeOperation 决定是否删除子标签
+                            return cascadeOperation ? null : val;
+                        } else {
+                            // 重命名操作：根据 cascadeOperation 决定是否重命名子标签
+                            return cascadeOperation ? newTag + val.substring(oldTag.length) : val;
+                        }
+                    }
                     return val;
                 }
                 if (Array.isArray(val)) {
-                    return val.map(replaceInValue);
+                    const processed = val.map(replaceInValue).filter(v => v !== null);
+                    return processed.length > 0 ? processed : undefined;
                 }
                 return val;
             };
 
             // 'tags' and 'tag' can be string or array
             if (frontmatter['tags']) {
-                frontmatter['tags'] = replaceInValue(frontmatter['tags']);
+                const result = replaceInValue(frontmatter['tags']);
+                if (result === undefined) {
+                    delete frontmatter['tags'];
+                } else {
+                    frontmatter['tags'] = result;
+                }
             }
             if (frontmatter['tag']) {
-                frontmatter['tag'] = replaceInValue(frontmatter['tag']);
+                const result = replaceInValue(frontmatter['tag']);
+                if (result === undefined) {
+                    delete frontmatter['tag'];
+                } else {
+                    frontmatter['tag'] = result;
+                }
             }
         });
 
@@ -206,18 +348,55 @@ export class TagRenamer {
 
         const escapedOldTag = this.escapeRegExp(oldTag);
 
-        // Regex: /(#)oldTag(?=[\/\s\p{P}]|$)/gu
-        const regex = new RegExp(`(#)${escapedOldTag}(?=[\\/\\s\\p{P}]|$)`, 'gu');
-
-        if (regex.test(content)) {
-            const newContent = content.replace(regex, `$1${newTag}`);
-            if (newContent !== content) {
-                await this.app.vault.modify(file, newContent);
+        if (isDeleteOperation) {
+            // 删除操作
+            if (cascadeOperation) {
+                // 级联删除：删除标签及其所有子标签
+                // 匹配 #oldTag 或 #oldTag/...
+                const regex = new RegExp(`#${escapedOldTag}(?:[\\/][^\\s]*)?\\s*`, 'gu');
+                const newContent = content.replace(regex, '');
+                if (newContent !== content) {
+                    await this.app.vault.modify(file, newContent);
+                }
+            } else {
+                // 仅删除此标签：只删除精确匹配的标签
+                const regex = new RegExp(`#${escapedOldTag}(?=[\\/\\s\\p{P}]|$)\\s*`, 'gu');
+                const newContent = content.replace(regex, '');
+                if (newContent !== content) {
+                    await this.app.vault.modify(file, newContent);
+                }
+            }
+        } else {
+            // 重命名操作
+            if (cascadeOperation) {
+                // 级联重命名：重命名标签及其所有子标签
+                const regex = new RegExp(`(#)${escapedOldTag}(?=[\\/\\s\\p{P}]|$)`, 'gu');
+                if (regex.test(content)) {
+                    const newContent = content.replace(regex, `$1${newTag}`);
+                    if (newContent !== content) {
+                        await this.app.vault.modify(file, newContent);
+                    }
+                }
+            } else {
+                // 仅重命名此标签：只重命名精确匹配的标签
+                const regex = new RegExp(`(#)${escapedOldTag}(?=[\\/\\s\\p{P}]|$)`, 'gu');
+                const newContent = content.replace(regex, (match, hash, offset) => {
+                    // 确保不是子标签的一部分
+                    const nextChar = content[offset + match.length];
+                    if (nextChar === '/') {
+                        return match; // 保持不变
+                    }
+                    return `${hash}${newTag}`;
+                });
+                if (newContent !== content) {
+                    await this.app.vault.modify(file, newContent);
+                }
             }
         }
     }
 
     private async processCanvasFile(file: TFile, oldTag: string, newTag: string): Promise<boolean> {
+        const isDeleteOperation = !newTag || newTag.trim() === '';
         const content = await this.app.vault.read(file);
         try {
             const canvasData = JSON.parse(content);
@@ -227,12 +406,17 @@ export class TagRenamer {
                 for (const node of canvasData.nodes) {
                     // Check 'text' property for Text Nodes or Group Nodes (which might have labels)
                     if (node.text && typeof node.text === 'string') {
-                        // Simple replace for now, similar to simple text file but manually
                         const escapedOldTag = this.escapeRegExp(oldTag);
                         const regex = new RegExp(`(#)${escapedOldTag}(?=[\\/\\s\\p{P}]|$)`, 'gu');
 
                         if (regex.test(node.text)) {
-                            node.text = node.text.replace(regex, `$1${newTag}`);
+                            if (isDeleteOperation) {
+                                // 删除标签：移除 #oldTag 及其后面的空格
+                                node.text = node.text.replace(new RegExp(`#${escapedOldTag}\\s*`, 'gu'), '');
+                            } else {
+                                // 重命名标签
+                                node.text = node.text.replace(regex, `$1${newTag}`);
+                            }
                             modified = true;
                         }
                     }

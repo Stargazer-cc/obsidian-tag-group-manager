@@ -82,6 +82,7 @@ interface TagGroupManagerSettings {
 	enableTextTagStyling: boolean;
 	expandTagPrefixes: string;           // 新增：指定要展开的第一级标签（逗号分隔）
 	expandDepth: number;                 // 新增：展开深度（2或3）
+	enableQuickRename: boolean;          // 新增：是否启用快捷重命名功能
 }
 
 const DEFAULT_SETTINGS: TagGroupManagerSettings = {
@@ -103,7 +104,8 @@ const DEFAULT_SETTINGS: TagGroupManagerSettings = {
 	},
 	enableTextTagStyling: false,
 	expandTagPrefixes: '',
-	expandDepth: 3
+	expandDepth: 3,
+	enableQuickRename: false
 };
 
 // 生成 UUID 的简单实现
@@ -536,6 +538,8 @@ export default class TagGroupManagerPlugin extends Plugin {
 		await this.saveData(this.settings);
 		// 更新命令
 		this.registerTagGroupCommands();
+		// 刷新标签颜色装饰
+		this.applyTextTagStyling();
 	}
 
 	async activateView() {
@@ -987,7 +991,6 @@ export default class TagGroupManagerPlugin extends Plugin {
 			return [];
 		}
 
-		const tagColors = this.settings.tagColors;
 		const presetColors: { [key: string]: string } = {
 			'var(--color-red)': '#e74c3c',
 			'var(--color-blue)': '#3498db',
@@ -998,11 +1001,10 @@ export default class TagGroupManagerPlugin extends Plugin {
 			'var(--color-pink)': '#e91e63'
 		};
 
-		// 为每个有颜色的标签预计算颜色值
-		const tagColorMap = new Map<string, { bgColor: string; textColor: string; safeAttr: string }>();
-
-		for (const [tag, color] of Object.entries(tagColors)) {
-			if (!color) continue;
+		// 辅助函数：根据标签名动态获取颜色信息
+		const getColorInfo = (tagName: string): { bgColor: string; textColor: string; safeAttr: string } | null => {
+			const color = this.settings.tagColors[tagName];
+			if (!color) return null;
 
 			let rgb = { r: 0, g: 0, b: 0 };
 			let hexColor = color;
@@ -1017,12 +1019,10 @@ export default class TagGroupManagerPlugin extends Plugin {
 
 			const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`;
 			const textColor = `rgb(${Math.floor(rgb.r * 0.65)}, ${Math.floor(rgb.g * 0.65)}, ${Math.floor(rgb.b * 0.65)})`;
-			const safeTagAttr = tag.replace(/[\/\s]/g, '-');
+			const safeTagAttr = tagName.replace(/[\/\s]/g, '-');
 
-			tagColorMap.set(tag, { bgColor, textColor, safeAttr: safeTagAttr });
-		}
-
-		const tagColorsSnapshot = new Map(tagColorMap);
+			return { bgColor, textColor, safeAttr: safeTagAttr };
+		};
 		
 		// 构建装饰器的辅助函数 - 使用 mark 装饰器，保持文本完全可编辑
 		const buildDecorations = (view: EditorView): DecorationSet => {
@@ -1037,7 +1037,7 @@ export default class TagGroupManagerPlugin extends Plugin {
 				while ((match = tagRegex.exec(text)) !== null) {
 					const fullTag = match[0];
 					const tagName = fullTag.substring(1);
-					const colorInfo = tagColorsSnapshot.get(tagName);
+					const colorInfo = getColorInfo(tagName);
 					
 					if (colorInfo) {
 						const tagFrom = from + match.index;
@@ -1093,8 +1093,8 @@ export default class TagGroupManagerPlugin extends Plugin {
 			const existingStyle = document.getElementById('tgm-dynamic-tag-styles');
 			if (existingStyle) existingStyle.remove();
 			
-			// 清空 CM6 扩展
-			this.app.workspace.iterateRootLeaves((leaf) => {
+			// 清空 CM6 扩展 - 使用 iterateAllLeaves 确保所有分屏都被更新
+			this.app.workspace.iterateAllLeaves((leaf) => {
 				if (leaf.view instanceof MarkdownView && leaf.view.editor) {
 					const cm = (leaf.view.editor as any).cm as EditorView;
 					if (cm) {
@@ -1209,9 +1209,9 @@ export default class TagGroupManagerPlugin extends Plugin {
 		}
 		styleEl.textContent = css;
 
-		// 更新 CM6 扩展
+		// 更新 CM6 扩展 - 使用 iterateAllLeaves 确保所有分屏都被更新
 		const extension = this.createTagColorExtension();
-		this.app.workspace.iterateRootLeaves((leaf) => {
+		this.app.workspace.iterateAllLeaves((leaf) => {
 			if (leaf.view instanceof MarkdownView && leaf.view.editor) {
 				const cm = (leaf.view.editor as any).cm as EditorView;
 				if (cm) {
@@ -2307,60 +2307,114 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		const section = containerEl.createDiv('settings-section');
 		new Setting(section).setName(i18n.t('multiLevelAdaptation.title') || '多级标签适配').setHeading();
 
-		// 展开配置区域（集中显示）
+		// 展开配置区域（集中显示）- 完全自定义布局
 		const expandConfigContainer = section.createDiv('tgm-expand-config-container');
 		expandConfigContainer.style.border = '1px solid var(--background-modifier-border)';
 		expandConfigContainer.style.borderRadius = '6px';
-		expandConfigContainer.style.padding = '16px';
+		expandConfigContainer.style.padding = '20px';
 		expandConfigContainer.style.marginBottom = '20px';
 		expandConfigContainer.style.backgroundColor = 'var(--background-secondary)';
 
-		// 展开深度
-		new Setting(expandConfigContainer)
-			.setName('展开深度')
-			.setDesc('3级展开：前三级作为组集/标签组/标签；2级展开：前两级作为标签组/标签（不创建组集）')
-			.addDropdown(dropdown => dropdown
-				.addOption('3', '3级展开（组集/标签组/标签）')
-				.addOption('2', '2级展开（标签组/标签）')
-				.setValue(this.plugin.settings.expandDepth.toString())
-				.onChange(async (value) => {
-					this.plugin.settings.expandDepth = parseInt(value);
-					// 根据展开深度自动设置智能匹配模式
-					if (parseInt(value) === 2) {
-						this.plugin.settings.multiLevelAutoAdd.matchMode = 'level1';
-					} else {
-						this.plugin.settings.multiLevelAutoAdd.matchMode = 'level2';
-					}
-					await this.plugin.saveSettings();
-					// 刷新设置页面以更新智能匹配区域的显示
-					this.display();
-				}));
+		// 1. 展开深度
+		const depthRow = expandConfigContainer.createDiv();
+		depthRow.style.display = 'flex';
+		depthRow.style.alignItems = 'center';
+		depthRow.style.justifyContent = 'space-between';
+		depthRow.style.gap = '16px';
+		depthRow.style.marginBottom = '20px';
+		
+		const depthLeft = depthRow.createDiv();
+		depthLeft.style.flex = '1';
+		depthLeft.style.minWidth = '0';
+		
+		const depthLabel = depthLeft.createDiv();
+		depthLabel.style.fontWeight = '500';
+		depthLabel.style.marginBottom = '6px';
+		depthLabel.setText('展开深度');
+		
+		const depthDesc = depthLeft.createDiv();
+		depthDesc.style.fontSize = '0.85em';
+		depthDesc.style.color = 'var(--text-muted)';
+		depthDesc.style.lineHeight = '1.4';
+		depthDesc.setText('3级展开：前三级作为组集/标签组/标签；2级展开：前两级作为标签组/标签（不创建组集）');
+		
+		const depthRight = depthRow.createDiv();
+		depthRight.style.minWidth = '280px';
+		
+		const depthSelect = depthRight.createEl('select');
+		depthSelect.addClass('dropdown');
+		depthSelect.style.width = '100%';
+		depthSelect.createEl('option', { text: '3级展开（组集/标签组/标签）', value: '3' });
+		depthSelect.createEl('option', { text: '2级展开（标签组/标签）', value: '2' });
+		depthSelect.value = this.plugin.settings.expandDepth.toString();
+		depthSelect.addEventListener('change', async () => {
+			this.plugin.settings.expandDepth = parseInt(depthSelect.value);
+			if (parseInt(depthSelect.value) === 2) {
+				this.plugin.settings.multiLevelAutoAdd.matchMode = 'level1';
+			} else {
+				this.plugin.settings.multiLevelAutoAdd.matchMode = 'level2';
+			}
+			await this.plugin.saveSettings();
+			this.display();
+		});
 
-		// 指定展开的第一级标签
-		new Setting(expandConfigContainer)
-			.setName('指定展开的第一级标签')
-			.setDesc('输入要展开的第一级标签名称，多个标签用逗号分隔。留空则展开所有多级标签。例如：前端,后端,数据库')
-			.addText(text => {
-				text.setPlaceholder('前端,后端,数据库')
-					.setValue(this.plugin.settings.expandTagPrefixes)
-					.onChange(async (value) => {
-						this.plugin.settings.expandTagPrefixes = value;
-						await this.plugin.saveSettings();
-					});
-				text.inputEl.style.width = '100%';
-			});
+		// 2. 指定展开的第一级标签
+		const prefixRow = expandConfigContainer.createDiv();
+		prefixRow.style.display = 'flex';
+		prefixRow.style.alignItems = 'center';
+		prefixRow.style.justifyContent = 'space-between';
+		prefixRow.style.gap = '16px';
+		prefixRow.style.marginBottom = '20px';
+		
+		const prefixLeft = prefixRow.createDiv();
+		prefixLeft.style.flex = '1';
+		prefixLeft.style.minWidth = '0';
+		
+		const prefixLabel = prefixLeft.createDiv();
+		prefixLabel.style.fontWeight = '500';
+		prefixLabel.style.marginBottom = '6px';
+		prefixLabel.setText('指定展开的第一级标签');
+		
+		const prefixDesc = prefixLeft.createDiv();
+		prefixDesc.style.fontSize = '0.85em';
+		prefixDesc.style.color = 'var(--text-muted)';
+		prefixDesc.style.lineHeight = '1.4';
+		prefixDesc.setText('输入要展开的第一级标签名称，多个标签用逗号分隔。留空则展开所有多级标签。例如：前端,后端,数据库');
+		
+		const prefixRight = prefixRow.createDiv();
+		prefixRight.style.minWidth = '280px';
+		
+		const prefixInput = prefixRight.createEl('input', { type: 'text' });
+		prefixInput.style.width = '100%';
+		prefixInput.placeholder = '前端,后端,数据库';
+		prefixInput.value = this.plugin.settings.expandTagPrefixes;
+		prefixInput.addEventListener('input', async () => {
+			this.plugin.settings.expandTagPrefixes = prefixInput.value;
+			await this.plugin.saveSettings();
+		});
 
-		// 立即展开按钮
-		new Setting(expandConfigContainer)
-			.setName('多级标签自动展开功能')
-			.setDesc('点击后将自动扫描库中的多级标签并转化为组集和标签组')
-			.addButton(btn => btn
-				.setButtonText('立即展开')
-				.setCta()
-				.onClick(async () => {
-					await this.plugin.convertMultiLevelTagsToGroups();
-					this.display();
-				}));
+		// 3. 立即展开按钮
+		const buttonRow = expandConfigContainer.createDiv();
+		buttonRow.style.display = 'flex';
+		buttonRow.style.alignItems = 'center';
+		buttonRow.style.justifyContent = 'space-between';
+		buttonRow.style.gap = '16px';
+		buttonRow.style.paddingTop = '8px';
+		buttonRow.style.borderTop = '1px solid var(--background-modifier-border)';
+		
+		const buttonDesc = buttonRow.createSpan();
+		buttonDesc.setText('点击后将自动扫描库中的多级标签并转化为组集和标签组');
+		buttonDesc.style.fontSize = '0.85em';
+		buttonDesc.style.color = 'var(--text-muted)';
+		buttonDesc.style.flex = '1';
+		
+		const expandBtn = buttonRow.createEl('button', { text: '立即展开' });
+		expandBtn.addClass('mod-cta');
+		expandBtn.style.whiteSpace = 'nowrap';
+		expandBtn.addEventListener('click', async () => {
+			await this.plugin.convertMultiLevelTagsToGroups();
+			this.display();
+		});
 
 		// 2.3 Auto Add Rules
 		const autoAddSection = section.createDiv('tgm-auto-add-section');
@@ -2769,17 +2823,13 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 	// 渲染全局标签重命名设置区域
 	renderRenameSettings(containerEl: HTMLElement): void {
 		const renameSection = containerEl.createDiv('settings-section');
-		renameSection.style.padding = '20px';
-		renameSection.style.marginBottom = '20px';
 		
 		// 标题
 		new Setting(renameSection)
 			.setName(i18n.t('rename.sectionTitle'))
 			.setHeading();
 
-		// 警告提示 - 更紧凑的样式
-		const warningText = i18n.t('rename.warning');
-		
+		// 警告提示 - 紧凑样式
 		const warningEl = renameSection.createDiv('tgm-rename-warning');
 		warningEl.style.padding = '8px 12px';
 		warningEl.style.marginBottom = '16px';
@@ -2787,18 +2837,15 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		warningEl.style.border = '1px solid rgba(255, 100, 100, 0.3)';
 		warningEl.style.borderRadius = '6px';
 		warningEl.style.fontSize = '0.9em';
-		warningEl.style.color = 'var(--text-normal)';
 		warningEl.style.display = 'flex';
 		warningEl.style.alignItems = 'center';
 		warningEl.style.gap = '8px';
 		
 		const iconSpan = warningEl.createSpan();
 		iconSpan.setText('⚠️');
-		iconSpan.style.fontSize = '1.2em';
 		
 		const textSpan = warningEl.createSpan();
-		textSpan.setText(warningText);
-		textSpan.style.flex = '1';
+		textSpan.setText(i18n.t('rename.warning'));
 
 		let oldTag = '';
 		let newTag = '';
@@ -2806,82 +2853,624 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 		let oldTagInput: TextComponent;
 		let newTagInput: TextComponent;
 
-		// 输入区域容器 - 使用flex布局使其更紧凑
-		const inputContainer = renameSection.createDiv('tgm-rename-inputs');
-		inputContainer.style.display = 'flex';
-		inputContainer.style.gap = '12px';
-		inputContainer.style.marginBottom = '12px';
-		inputContainer.style.flexWrap = 'wrap';
+		// 主容器
+		const mainContainer = renameSection.createDiv();
+		mainContainer.style.marginBottom = '20px';
 
-		// 旧标签名输入
-		const oldTagContainer = inputContainer.createDiv();
-		oldTagContainer.style.flex = '1';
-		oldTagContainer.style.minWidth = '200px';
-		new Setting(oldTagContainer)
-			.setName(i18n.t('rename.oldTagName'))
-			.setDesc(i18n.t('rename.oldTagNameDesc'))
-			.addText(text => {
-				oldTagInput = text;
-				text.setPlaceholder(i18n.t('rename.oldTagName'))
-					.onChange(async (value) => {
-						oldTag = value;
-					});
-			});
+		// 控件行（输入框、开关、按钮）
+		const controlsRow = mainContainer.createDiv();
+		controlsRow.style.display = 'flex';
+		controlsRow.style.alignItems = 'center';
+		controlsRow.style.gap = '12px';
+		controlsRow.style.marginBottom = '8px';
 
-		// 新标签名输入
-		const newTagContainer = inputContainer.createDiv();
-		newTagContainer.style.flex = '1';
-		newTagContainer.style.minWidth = '200px';
-		new Setting(newTagContainer)
-			.setName(i18n.t('rename.newTagName'))
-			.setDesc(i18n.t('rename.newTagNameDesc'))
-			.addText(text => {
-				newTagInput = text;
-				text.setPlaceholder(i18n.t('rename.newTagName'))
-					.onChange(async (value) => {
-						newTag = value;
-					});
-			});
+		// 旧标签输入框
+		const oldTagInput_el = controlsRow.createEl('input', {
+			type: 'text',
+			placeholder: i18n.t('rename.oldTagName')
+		});
+		oldTagInput_el.style.flex = '1';
+		oldTagInput_el.style.minWidth = '150px';
+		oldTagInput_el.style.padding = '6px 10px';
+		oldTagInput_el.addEventListener('input', (e) => {
+			oldTag = (e.target as HTMLInputElement).value;
+		});
 
-		// Canvas选项和按钮容器 - 放在同一行
-		const actionContainer = renameSection.createDiv('tgm-rename-actions');
-		actionContainer.style.display = 'flex';
-		actionContainer.style.alignItems = 'center';
-		actionContainer.style.gap = '16px';
-		actionContainer.style.marginTop = '12px';
+		// 箭头
+		const arrowSpan = controlsRow.createSpan({ text: '→' });
+		arrowSpan.style.fontSize = '1.2em';
+		arrowSpan.style.color = 'var(--text-muted)';
 
-		// Canvas选项
-		const canvasToggleContainer = actionContainer.createDiv();
-		canvasToggleContainer.style.flex = '1';
-		new Setting(canvasToggleContainer)
-			.setName(i18n.t('rename.includeCanvas'))
-			.setDesc(i18n.t('rename.includeCanvasDesc'))
-			.addToggle(toggle => toggle
-				.setValue(false)
-				.onChange(async (value) => {
-					includeCanvas = value;
-				}));
+		// 新标签输入框
+		const newTagInput_el = controlsRow.createEl('input', {
+			type: 'text',
+			placeholder: i18n.t('rename.newTagName')
+		});
+		newTagInput_el.style.flex = '1';
+		newTagInput_el.style.minWidth = '150px';
+		newTagInput_el.style.padding = '6px 10px';
+		newTagInput_el.addEventListener('input', (e) => {
+			newTag = (e.target as HTMLInputElement).value;
+		});
+
+		// Canvas 开关
+		const toggleContainer = controlsRow.createDiv();
+		toggleContainer.style.display = 'flex';
+		toggleContainer.style.alignItems = 'center';
+		toggleContainer.style.gap = '6px';
+		
+		const toggleLabel = toggleContainer.createSpan({ text: 'Canvas' });
+		toggleLabel.style.fontSize = '0.9em';
+		toggleLabel.style.color = 'var(--text-muted)';
+		
+		const toggleSwitch = toggleContainer.createDiv();
+		toggleSwitch.addClass('checkbox-container');
+		const checkbox = toggleSwitch.createEl('input', { type: 'checkbox' });
+		checkbox.addEventListener('change', (e) => {
+			includeCanvas = (e.target as HTMLInputElement).checked;
+		});
 
 		// 重命名按钮
-		const buttonContainer = actionContainer.createDiv();
-		new Setting(buttonContainer)
-			.addButton(btn => btn
-				.setButtonText(i18n.t('rename.button'))
-				.setCta()
-				.onClick(async () => {
-					if (!oldTag || !newTag) {
-						new Notice(i18n.t('rename.warning'));
-						return;
-					}
-					// 执行重命名
-					await new TagRenamer(this.app, this.plugin).renameTag(oldTag, newTag, includeCanvas);
-					
-					// 清空输入框
-					oldTagInput.setValue('');
-					newTagInput.setValue('');
-					oldTag = '';
-					newTag = '';
+		const renameBtn = controlsRow.createEl('button', {
+			text: i18n.t('rename.button')
+		});
+		renameBtn.addClass('mod-cta');
+		renameBtn.style.whiteSpace = 'nowrap';
+		renameBtn.addEventListener('click', async () => {
+			if (!oldTag) {
+				new Notice(i18n.t('rename.warning'));
+				return;
+			}
+			
+			// 如果新标签名为空，视为删除操作
+			if (!newTag || newTag.trim() === '') {
+				// 显示确认对话框
+				const result = await this.showDeleteConfirmDialog(oldTag);
+				if (!result.confirmed) {
+					return;
+				}
+				// 执行删除操作（重命名为空字符串）
+				await new TagRenamer(this.app, this.plugin).deleteTag(oldTag, result.cascadeDelete, includeCanvas);
+			} else {
+				// 重命名操作：显示确认对话框
+				const result = await this.showRenameConfirmDialog(oldTag, newTag);
+				if (!result.confirmed) {
+					return;
+				}
+				// 执行重命名
+				await new TagRenamer(this.app, this.plugin).renameTag(oldTag, newTag, includeCanvas, result.cascadeRename);
+			}
+			
+			// 清空输入框
+			oldTagInput_el.value = '';
+			newTagInput_el.value = '';
+			oldTag = '';
+			newTag = '';
+		});
+
+		// 说明文字行
+		const descRow = mainContainer.createDiv();
+		descRow.style.fontSize = '0.85em';
+		descRow.style.color = 'var(--text-muted)';
+		descRow.style.lineHeight = '1.4';
+		descRow.innerHTML = i18n.t('rename.oldTagNameDesc') + ' | ' + i18n.t('rename.newTagNameEmptyDesc') + ' | ' + i18n.t('rename.includeCanvasDesc');
+
+		// 快捷重命名开关
+		new Setting(renameSection)
+			.setName(i18n.t('rename.enableQuickRename'))
+			.setDesc(i18n.t('rename.enableQuickRenameDesc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableQuickRename)
+				.onChange(async (value) => {
+					this.plugin.settings.enableQuickRename = value;
+					await this.plugin.saveSettings();
+					// 刷新显示以立即应用更改
+					this.display();
 				}));
+	}
+
+	// 显示重命名确认对话框
+	private async showRenameConfirmDialog(oldTag: string, newTag: string): Promise<{ confirmed: boolean; cascadeRename: boolean }> {
+		return new Promise((resolve) => {
+			const modal = new Modal(this.app);
+			modal.titleEl.setText(i18n.t('rename.renameConfirmTitle'));
+			
+			const content = modal.contentEl;
+			content.style.padding = '20px';
+			content.style.maxWidth = '600px';
+			
+			// 警告图标和文字
+			const warningDiv = content.createDiv();
+			warningDiv.style.display = 'flex';
+			warningDiv.style.alignItems = 'center';
+			warningDiv.style.gap = '12px';
+			warningDiv.style.marginBottom = '20px';
+			warningDiv.style.padding = '12px';
+			warningDiv.style.backgroundColor = 'rgba(255, 165, 0, 0.15)';
+			warningDiv.style.border = '1px solid rgba(255, 165, 0, 0.3)';
+			warningDiv.style.borderRadius = '6px';
+			
+			const iconSpan = warningDiv.createSpan({ text: '⚠️' });
+			iconSpan.style.fontSize = '1.5em';
+			
+			const textDiv = warningDiv.createDiv();
+			textDiv.style.flex = '1';
+			textDiv.innerHTML = i18n.t('rename.renameWarning');
+			
+			// 重命名信息
+			const infoDiv = content.createDiv();
+			infoDiv.style.marginBottom = '16px';
+			infoDiv.style.padding = '12px';
+			infoDiv.style.backgroundColor = 'var(--background-secondary)';
+			infoDiv.style.borderRadius = '6px';
+			infoDiv.style.fontFamily = 'var(--font-monospace)';
+			
+			const renameText = infoDiv.createDiv();
+			renameText.innerHTML = `<strong>#${oldTag}</strong> → <strong>#${newTag}</strong>`;
+			
+			// 检查是否有子标签和影响范围
+			const affectedTags = this.getAffectedTags(oldTag, newTag);
+			let cascadeRename = true; // 默认级联重命名
+			
+			// 显示影响范围
+			if (affectedTags.children.length > 0) {
+				const impactDiv = content.createDiv();
+				impactDiv.style.marginBottom = '16px';
+				impactDiv.style.padding = '12px';
+				impactDiv.style.backgroundColor = 'var(--background-secondary)';
+				impactDiv.style.borderRadius = '6px';
+				
+				const impactTitle = impactDiv.createDiv();
+				impactTitle.style.fontWeight = '500';
+				impactTitle.style.marginBottom = '8px';
+				impactTitle.setText(i18n.t('rename.affectedTags'));
+				
+				const impactList = impactDiv.createEl('ul');
+				impactList.style.margin = '0';
+				impactList.style.paddingLeft = '20px';
+				impactList.style.fontSize = '0.9em';
+				impactList.style.maxHeight = '150px';
+				impactList.style.overflowY = 'auto';
+				
+				affectedTags.children.forEach(child => {
+					const li = impactList.createEl('li');
+					li.style.fontFamily = 'var(--font-monospace)';
+					li.innerHTML = `<span style="color: var(--text-muted);">#${child.old}</span> → <span style="color: var(--text-accent);">#${child.new}</span>`;
+				});
+				
+				const summary = impactDiv.createDiv();
+				summary.style.marginTop = '8px';
+				summary.style.fontSize = '0.85em';
+				summary.style.color = 'var(--text-muted)';
+				summary.setText(i18n.t('rename.totalAffected').replace('{count}', (affectedTags.children.length + 1).toString()));
+				
+				// 选项：是否级联重命名
+				const optionsDiv = content.createDiv();
+				optionsDiv.style.marginTop = '16px';
+				optionsDiv.style.marginBottom = '16px';
+				
+				const optionTitle = optionsDiv.createDiv();
+				optionTitle.style.fontWeight = '500';
+				optionTitle.style.marginBottom = '12px';
+				optionTitle.setText(i18n.t('rename.renameOptions'));
+				
+				// 选项1：级联重命名（默认）
+				const option1 = optionsDiv.createDiv();
+				option1.style.display = 'flex';
+				option1.style.alignItems = 'flex-start';
+				option1.style.gap = '8px';
+				option1.style.marginBottom = '8px';
+				option1.style.cursor = 'pointer';
+				option1.style.padding = '8px';
+				option1.style.borderRadius = '4px';
+				option1.style.border = '2px solid var(--interactive-accent)';
+				option1.style.backgroundColor = 'var(--background-primary)';
+				
+				const radio1 = option1.createEl('input', { type: 'radio' });
+				radio1.name = 'renameOption';
+				radio1.checked = true;
+				
+				const label1 = option1.createDiv();
+				label1.style.flex = '1';
+				const label1Title = label1.createDiv();
+				label1Title.style.fontWeight = '500';
+				label1Title.setText(i18n.t('rename.cascadeRename'));
+				const label1Desc = label1.createDiv();
+				label1Desc.style.fontSize = '0.85em';
+				label1Desc.style.color = 'var(--text-muted)';
+				label1Desc.style.marginTop = '4px';
+				label1Desc.setText(i18n.t('rename.cascadeRenameDesc'));
+				
+				option1.addEventListener('click', () => {
+					radio1.checked = true;
+					radio2.checked = false;
+					cascadeRename = true;
+					option1.style.border = '2px solid var(--interactive-accent)';
+					option2.style.border = '1px solid var(--background-modifier-border)';
+				});
+				
+				// 选项2：仅重命名此标签
+				const option2 = optionsDiv.createDiv();
+				option2.style.display = 'flex';
+				option2.style.alignItems = 'flex-start';
+				option2.style.gap = '8px';
+				option2.style.cursor = 'pointer';
+				option2.style.padding = '8px';
+				option2.style.borderRadius = '4px';
+				option2.style.border = '1px solid var(--background-modifier-border)';
+				option2.style.backgroundColor = 'var(--background-primary)';
+				
+				const radio2 = option2.createEl('input', { type: 'radio' });
+				radio2.name = 'renameOption';
+				
+				const label2 = option2.createDiv();
+				label2.style.flex = '1';
+				const label2Title = label2.createDiv();
+				label2Title.style.fontWeight = '500';
+				label2Title.setText(i18n.t('rename.onlyThisTagRename'));
+				const label2Desc = label2.createDiv();
+				label2Desc.style.fontSize = '0.85em';
+				label2Desc.style.color = 'var(--text-muted)';
+				label2Desc.style.marginTop = '4px';
+				label2Desc.innerHTML = i18n.t('rename.onlyThisTagRenameDesc');
+				
+				option2.addEventListener('click', () => {
+					radio2.checked = true;
+					radio1.checked = false;
+					cascadeRename = false;
+					option2.style.border = '2px solid var(--interactive-accent)';
+					option1.style.border = '1px solid var(--background-modifier-border)';
+				});
+			}
+			
+			// 按钮容器
+			const buttonContainer = content.createDiv();
+			buttonContainer.style.display = 'flex';
+			buttonContainer.style.justifyContent = 'flex-end';
+			buttonContainer.style.gap = '12px';
+			buttonContainer.style.marginTop = '20px';
+			
+			// 取消按钮
+			const cancelBtn = buttonContainer.createEl('button', { text: i18n.t('rename.cancel') });
+			cancelBtn.addEventListener('click', () => {
+				modal.close();
+				resolve({ confirmed: false, cascadeRename: true });
+			});
+			
+			// 确认重命名按钮
+			const confirmBtn = buttonContainer.createEl('button', { text: i18n.t('rename.confirmRename') });
+			confirmBtn.addClass('mod-cta');
+			confirmBtn.addEventListener('click', () => {
+				modal.close();
+				resolve({ confirmed: true, cascadeRename });
+			});
+			
+			modal.open();
+		});
+	}
+	
+	// 获取受影响的标签列表
+	private getAffectedTags(oldTag: string, newTag: string): { children: Array<{ old: string; new: string }> } {
+		const children: Array<{ old: string; new: string }> = [];
+		const allFiles = this.app.vault.getMarkdownFiles();
+		const prefix = oldTag + '/';
+		const foundTags = new Set<string>();
+		
+		for (const file of allFiles) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (cache?.tags) {
+				for (const tag of cache.tags) {
+					const tagText = tag.tag.substring(1); // 移除 #
+					if (tagText.startsWith(prefix) && !foundTags.has(tagText)) {
+						foundTags.add(tagText);
+						const newTagText = newTag + tagText.substring(oldTag.length);
+						children.push({ old: tagText, new: newTagText });
+					}
+				}
+			}
+			// 检查 frontmatter
+			if (cache?.frontmatter) {
+				const fmTags = cache.frontmatter.tags || cache.frontmatter.tag;
+				if (fmTags) {
+					const tags = Array.isArray(fmTags) ? fmTags : [fmTags];
+					for (const t of tags) {
+						if (typeof t === 'string' && t.startsWith(prefix) && !foundTags.has(t)) {
+							foundTags.add(t);
+							const newTagText = newTag + t.substring(oldTag.length);
+							children.push({ old: t, new: newTagText });
+						}
+					}
+				}
+			}
+		}
+		
+		return { children: children.sort((a, b) => a.old.localeCompare(b.old)) };
+	}
+	
+	// 显示删除确认对话框
+	private async showDeleteConfirmDialog(tagName: string): Promise<{ confirmed: boolean; cascadeDelete: boolean }> {
+		return new Promise((resolve) => {
+			const modal = new Modal(this.app);
+			modal.titleEl.setText(i18n.t('rename.deleteConfirmTitle'));
+			
+			const content = modal.contentEl;
+			content.style.padding = '20px';
+			
+			// 警告图标和文字
+			const warningDiv = content.createDiv();
+			warningDiv.style.display = 'flex';
+			warningDiv.style.alignItems = 'center';
+			warningDiv.style.gap = '12px';
+			warningDiv.style.marginBottom = '20px';
+			warningDiv.style.padding = '12px';
+			warningDiv.style.backgroundColor = 'rgba(255, 100, 100, 0.15)';
+			warningDiv.style.border = '1px solid rgba(255, 100, 100, 0.3)';
+			warningDiv.style.borderRadius = '6px';
+			
+			const iconSpan = warningDiv.createSpan({ text: '⚠️' });
+			iconSpan.style.fontSize = '1.5em';
+			
+			const textDiv = warningDiv.createDiv();
+			textDiv.style.flex = '1';
+			textDiv.innerHTML = i18n.t('rename.deleteConfirmMessage').replace('{tag}', `<strong>#${tagName}</strong>`);
+			
+			// 检查是否有子标签
+			const hasChildren = this.hasChildTags(tagName);
+			let cascadeDelete = true; // 默认级联删除
+			
+			// 如果有子标签，显示选项
+			if (hasChildren) {
+				const optionsDiv = content.createDiv();
+				optionsDiv.style.marginTop = '16px';
+				optionsDiv.style.marginBottom = '16px';
+				optionsDiv.style.padding = '12px';
+				optionsDiv.style.backgroundColor = 'var(--background-secondary)';
+				optionsDiv.style.borderRadius = '6px';
+				
+				const optionTitle = optionsDiv.createDiv();
+				optionTitle.style.fontWeight = '500';
+				optionTitle.style.marginBottom = '12px';
+				optionTitle.setText(i18n.t('rename.deleteOptions'));
+				
+				// 选项1：级联删除（默认）
+				const option1 = optionsDiv.createDiv();
+				option1.style.display = 'flex';
+				option1.style.alignItems = 'flex-start';
+				option1.style.gap = '8px';
+				option1.style.marginBottom = '8px';
+				option1.style.cursor = 'pointer';
+				option1.style.padding = '8px';
+				option1.style.borderRadius = '4px';
+				option1.style.border = '2px solid var(--interactive-accent)';
+				option1.style.backgroundColor = 'var(--background-primary)';
+				
+				const radio1 = option1.createEl('input', { type: 'radio' });
+				radio1.name = 'deleteOption';
+				radio1.checked = true;
+				
+				const label1 = option1.createDiv();
+				label1.style.flex = '1';
+				const label1Title = label1.createDiv();
+				label1Title.style.fontWeight = '500';
+				label1Title.setText(i18n.t('rename.cascadeDelete'));
+				const label1Desc = label1.createDiv();
+				label1Desc.style.fontSize = '0.85em';
+				label1Desc.style.color = 'var(--text-muted)';
+				label1Desc.style.marginTop = '4px';
+				label1Desc.setText(i18n.t('rename.cascadeDeleteDesc'));
+				
+				option1.addEventListener('click', () => {
+					radio1.checked = true;
+					radio2.checked = false;
+					cascadeDelete = true;
+					option1.style.border = '2px solid var(--interactive-accent)';
+					option2.style.border = '1px solid var(--background-modifier-border)';
+				});
+				
+				// 选项2：仅删除此标签
+				const option2 = optionsDiv.createDiv();
+				option2.style.display = 'flex';
+				option2.style.alignItems = 'flex-start';
+				option2.style.gap = '8px';
+				option2.style.cursor = 'pointer';
+				option2.style.padding = '8px';
+				option2.style.borderRadius = '4px';
+				option2.style.border = '1px solid var(--background-modifier-border)';
+				option2.style.backgroundColor = 'var(--background-primary)';
+				
+				const radio2 = option2.createEl('input', { type: 'radio' });
+				radio2.name = 'deleteOption';
+				
+				const label2 = option2.createDiv();
+				label2.style.flex = '1';
+				const label2Title = label2.createDiv();
+				label2Title.style.fontWeight = '500';
+				label2Title.setText(i18n.t('rename.onlyThisTag'));
+				const label2Desc = label2.createDiv();
+				label2Desc.style.fontSize = '0.85em';
+				label2Desc.style.color = 'var(--text-muted)';
+				label2Desc.style.marginTop = '4px';
+				label2Desc.innerHTML = i18n.t('rename.onlyThisTagDesc');
+				
+				option2.addEventListener('click', () => {
+					radio2.checked = true;
+					radio1.checked = false;
+					cascadeDelete = false;
+					option2.style.border = '2px solid var(--interactive-accent)';
+					option1.style.border = '1px solid var(--background-modifier-border)';
+				});
+			}
+			
+			// 按钮容器
+			const buttonContainer = content.createDiv();
+			buttonContainer.style.display = 'flex';
+			buttonContainer.style.justifyContent = 'flex-end';
+			buttonContainer.style.gap = '12px';
+			buttonContainer.style.marginTop = '20px';
+			
+			// 取消按钮
+			const cancelBtn = buttonContainer.createEl('button', { text: i18n.t('rename.cancel') });
+			cancelBtn.addEventListener('click', () => {
+				modal.close();
+				resolve({ confirmed: false, cascadeDelete: true });
+			});
+			
+			// 确认删除按钮
+			const confirmBtn = buttonContainer.createEl('button', { text: i18n.t('rename.confirmDelete') });
+			confirmBtn.addClass('mod-warning');
+			confirmBtn.addEventListener('click', () => {
+				modal.close();
+				resolve({ confirmed: true, cascadeDelete });
+			});
+			
+			modal.open();
+		});
+	}
+	
+	// 检查标签是否有子标签
+	private hasChildTags(tagName: string): boolean {
+		const allFiles = this.app.vault.getMarkdownFiles();
+		const prefix = tagName + '/';
+		
+		for (const file of allFiles) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (cache?.tags) {
+				for (const tag of cache.tags) {
+					const tagText = tag.tag.substring(1); // 移除 #
+					if (tagText.startsWith(prefix)) {
+						return true;
+					}
+				}
+			}
+			// 检查 frontmatter
+			if (cache?.frontmatter) {
+				const fmTags = cache.frontmatter.tags || cache.frontmatter.tag;
+				if (fmTags) {
+					const tags = Array.isArray(fmTags) ? fmTags : [fmTags];
+					for (const t of tags) {
+						if (typeof t === 'string' && t.startsWith(prefix)) {
+							return true;
+						}
+					}
+				}
+			}
+		}
+		
+		return false;
+	}
+
+	// 显示快捷重命名模态框
+	private showQuickRenameModal(oldTag: string, groupIndex: number): void {
+		const modal = new Modal(this.app);
+		modal.titleEl.setText(i18n.t('rename.quickRenameTitle'));
+		
+		const content = modal.contentEl;
+		content.style.padding = '20px';
+		content.style.minWidth = '400px';
+		
+		// 当前标签提示
+		const currentTagDiv = content.createDiv();
+		currentTagDiv.style.marginBottom = '16px';
+		currentTagDiv.style.padding = '12px';
+		currentTagDiv.style.backgroundColor = 'var(--background-secondary)';
+		currentTagDiv.style.borderRadius = '6px';
+		currentTagDiv.style.fontFamily = 'var(--font-monospace)';
+		currentTagDiv.innerHTML = i18n.t('rename.quickRenameDesc').replace('{tag}', `<strong>#${oldTag}</strong>`);
+		
+		// 新标签名输入框
+		const inputContainer = content.createDiv();
+		inputContainer.style.marginBottom = '16px';
+		
+		const inputLabel = inputContainer.createDiv();
+		inputLabel.style.fontWeight = '500';
+		inputLabel.style.marginBottom = '8px';
+		inputLabel.setText(i18n.t('rename.newTagName'));
+		
+		const newTagInput = inputContainer.createEl('input', {
+			type: 'text',
+			placeholder: i18n.t('rename.newTagNameDesc')
+		});
+		newTagInput.style.width = '100%';
+		newTagInput.style.padding = '8px 12px';
+		newTagInput.style.fontSize = '1em';
+		newTagInput.value = oldTag; // 预填充旧标签名
+		
+		// Canvas 开关
+		const canvasContainer = content.createDiv();
+		canvasContainer.style.display = 'flex';
+		canvasContainer.style.alignItems = 'center';
+		canvasContainer.style.gap = '8px';
+		canvasContainer.style.marginBottom = '16px';
+		
+		const canvasCheckbox = canvasContainer.createEl('input', { type: 'checkbox' });
+		canvasCheckbox.id = 'quick-rename-canvas';
+		
+		const canvasLabel = canvasContainer.createEl('label');
+		canvasLabel.setAttribute('for', 'quick-rename-canvas');
+		canvasLabel.setText(i18n.t('rename.includeCanvas'));
+		canvasLabel.style.cursor = 'pointer';
+		
+		// 按钮容器
+		const buttonContainer = content.createDiv();
+		buttonContainer.style.display = 'flex';
+		buttonContainer.style.justifyContent = 'flex-end';
+		buttonContainer.style.gap = '12px';
+		buttonContainer.style.marginTop = '20px';
+		
+		// 取消按钮
+		const cancelBtn = buttonContainer.createEl('button', { text: i18n.t('rename.cancel') });
+		cancelBtn.addEventListener('click', () => {
+			modal.close();
+		});
+		
+		// 确认按钮
+		const confirmBtn = buttonContainer.createEl('button', { text: i18n.t('rename.confirmRename') });
+		confirmBtn.addClass('mod-cta');
+		confirmBtn.addEventListener('click', async () => {
+			const newTag = newTagInput.value.trim();
+			const includeCanvas = canvasCheckbox.checked;
+			
+			if (!newTag) {
+				new Notice(i18n.t('rename.warning'));
+				return;
+			}
+			
+			modal.close();
+			
+			// 如果新标签名为空，视为删除操作
+			if (!newTag || newTag.trim() === '') {
+				const result = await this.showDeleteConfirmDialog(oldTag);
+				if (!result.confirmed) {
+					return;
+				}
+				await new TagRenamer(this.app, this.plugin).deleteTag(oldTag, result.cascadeDelete, includeCanvas);
+			} else {
+				// 重命名操作：显示确认对话框
+				const result = await this.showRenameConfirmDialog(oldTag, newTag);
+				if (!result.confirmed) {
+					return;
+				}
+				await new TagRenamer(this.app, this.plugin).renameTag(oldTag, newTag, includeCanvas, result.cascadeRename);
+			}
+			
+			// 刷新显示
+			this.display();
+		});
+		
+		// 回车键确认
+		newTagInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				confirmBtn.click();
+			}
+		});
+		
+		modal.open();
+		
+		// 自动聚焦输入框并选中所有文本
+		setTimeout(() => {
+			newTagInput.focus();
+			newTagInput.select(); // 选中所有文本，方便用户直接编辑
+		}, 50);
 	}
 
 	// 渲染标签组设置区域
@@ -3079,6 +3668,17 @@ class TagGroupManagerSettingTab extends PluginSettingTab {
 							// 刷新显示
 							this.display();
 						}).open();
+					});
+				}
+
+				// 添加右键快捷重命名（仅在启用快捷重命名时）
+				if (this.plugin.settings.enableQuickRename) {
+					tagEl.addEventListener('contextmenu', (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						
+						// 直接打开快捷重命名对话框
+						this.showQuickRenameModal(tag, index);
 					});
 				}
 
