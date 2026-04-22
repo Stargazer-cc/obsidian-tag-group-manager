@@ -1807,6 +1807,55 @@ class TagSelectorModal {
 					// No need to dispatch input event for Obsidian's search, it handles it.
 				} else {
 					// 在编辑器中插入标签
+					// 首先尝试使用 document.execCommand 方法（对实时预览模式的表格更友好）
+					const selection = window.getSelection();
+					if (selection && selection.rangeCount > 0 && activeElement) {
+						// 检查是否在 cm-content 中（实时预览模式）
+						const cmContent = activeElement.closest('.cm-content');
+						if (cmContent) {
+							try {
+								// 使用 execCommand 插入，这在实时预览模式的表格中更可靠
+								const range = selection.getRangeAt(0);
+								const textNode = range.startContainer;
+								const offset = range.startOffset;
+
+								// 检查光标前的字符
+								let charBefore = '';
+								if (textNode.nodeType === Node.TEXT_NODE) {
+									const text = textNode.textContent || '';
+									if (offset > 0) {
+										charBefore = text[offset - 1];
+									}
+								}
+
+								const prefix = (charBefore && charBefore !== ' ' && charBefore !== '\n' && charBefore.trim() !== '') ? ' ' : '';
+								const tagText = `${prefix}#${tag} `;
+
+								document.execCommand('insertText', false, tagText);
+
+								// 在非循环模式下，将标签添加已插入样式
+								if (!this.isInfiniteMode) {
+									tagEl.addClass('tgm-inserted-tag');
+								}
+
+								// 立即更新计数显示
+								tagCountEl.setText(`${count + 1}`);
+
+								// 等待元数据缓存更新后再次刷新计数
+								setTimeout(() => {
+									const newCount = this.getTagCount(tag);
+									tagCountEl.setText(`${newCount}`);
+								}, 3000);
+
+								return; // 成功插入，直接返回
+							} catch (e) {
+								// 如果 execCommand 失败，继续使用原来的方法
+								console.log('execCommand failed, falling back to editor API', e);
+							}
+						}
+					}
+
+					// 回退到原来的编辑器 API 方法
 					const cursor = this.editor.getCursor();
 					const line = this.editor.getLine(cursor.line);
 
@@ -4701,6 +4750,39 @@ class TagGroupView extends ItemView {
 							// 检查是否是 Markdown 视图
 							if (leafView && viewType === 'markdown') {
 								editor = (leafView as MarkdownView).editor;
+							}
+						}
+
+						// 在尝试使用编辑器 API 之前，先尝试使用 execCommand（对实时预览模式的表格更友好）
+						const selection = window.getSelection();
+						if (selection && selection.rangeCount > 0 && activeElement) {
+							// 检查是否在 cm-content 中（实时预览模式）
+							const cmContent = activeElement.closest('.cm-content');
+							if (cmContent && editor) {
+								try {
+									// 使用 execCommand 插入，这在实时预览模式的表格中更可靠
+									const range = selection.getRangeAt(0);
+									const textNode = range.startContainer;
+									const offset = range.startOffset;
+
+									// 检查光标前的字符
+									let charBefore = '';
+									if (textNode.nodeType === Node.TEXT_NODE) {
+										const text = textNode.textContent || '';
+										if (offset > 0) {
+											charBefore = text[offset - 1];
+										}
+									}
+
+									const prefix = (charBefore && charBefore !== ' ' && charBefore !== '\n' && charBefore.trim() !== '') ? ' ' : '';
+									const tagText = `${prefix}#${tag} `;
+
+									document.execCommand('insertText', false, tagText);
+									return; // 成功插入，直接返回
+								} catch (e) {
+									// 如果 execCommand 失败，继续使用原来的方法
+									console.log('execCommand failed, falling back to editor API', e);
+								}
 							}
 						}
 

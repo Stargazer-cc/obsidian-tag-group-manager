@@ -1,4 +1,18 @@
 {
+  "1.8.13": {
+    "zh": [
+      "## 🐛 修复",
+      "",
+      "**实时预览模式表格支持**",
+      "- 修复在实时预览模式（Live Preview）下的表格中无法插入标签的问题"
+    ],
+    "en": [
+      "## 🐛 Bug Fixes",
+      "",
+      "**Live Preview Table Support**",
+      "- Fixed issue where tags could not be inserted in tables in Live Preview mode"
+    ]
+  },
   "1.8.12": {
     "zh": [
       "## 🎯 重大改进：标签重命名与删除功能全面升级",
