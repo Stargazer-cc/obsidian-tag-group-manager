@@ -11,7 +11,7 @@
 
 </div>
 
-Tag Group Manager 是一个为 [Obsidian](https://obsidian.md/) 设计的标签管理增强插件，提供标签组管理、快速标签插入、标签全局重命名、自定义标签颜色和强大的标签组织功能，用于提升笔记整理和分类效率。
+Tag Group Manager 是一个为 [Obsidian](https://obsidian.md/) 设计的标签管理增强插件，拥有标签组管理、快速标签插入、标签全局重命名、自定义标签颜色和强大的标签组织功能，用于提升笔记整理和分类效率。
 
 更详细的介绍请访问 [Obsidian 中文论坛](https://forum-zh.obsidian.md/t/topic/47614)
 
